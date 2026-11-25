@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TabYT</title>
+  <link rel="icon" href="../icons/icon32.png">
+  <link rel="stylesheet" href="common.css">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <a class="skip-link" href="#popup-main">Skip to content</a>
+
+  <header class="popup-header">
+    <div class="brand" aria-label="TabYT">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/></svg>
+      </span>
+      <span class="brand-name"><strong>TabYT</strong><span>YouTube tab memory</span></span>
+    </div>
+    <div class="header-actions">
+      <span class="live-pill" id="monitor-pill" title="TabYT runs locally in your browser">
+        <i class="dot live" aria-hidden="true"></i>
+        <span id="monitor-text">Monitoring</span>
+      </span>
+      <button class="icon-btn" id="open-settings" type="button" aria-label="Open dashboard settings" title="Settings">
+        <span data-icon="settings"></span>
+      </button>
+    </div>
+  </header>
+
+  <main class="popup-main" id="popup-main">
+    <div class="error-banner" id="error-banner" hidden>
+      <span data-icon="alert"></span>
+      <span class="grow" id="error-text">TabYT could not load your tabs.</span>
+      <button class="btn btn-sm" id="error-retry" type="button">Retry</button>
+    </div>
+
+    <section class="status-card" id="status-card" aria-label="Memory overview">
+      <div class="status-top">
+        <div class="status-copy">
+          <div class="status-value-row">
+            <strong class="status-value" id="memory-total">—</strong>
+            <span class="badge" id="source-badge">Estimated</span>
+          </div>
+          <p class="status-line" id="status-line">Loading your YouTube tabs…</p>
+        </div>
+        <div class="memory-ring" id="memory-ring" style="--pct:0" aria-hidden="true">
+          <div class="memory-ring-inner">
+            <strong id="ring-value">—</strong>
+            <span id="ring-label">of limit</span>
+          </div>
+        </div>
+      </div>
+      <div class="progress" id="status-progress"><span id="status-progress-fill" style="width:0%"></span></div>
+      <div class="status-meta">
+        <span id="tab-count">0 YouTube tabs</span>
+        <span id="limit-label">No limit set</span>
+      </div>
+    </section>
+
+    <div class="primary-actions">
+      <button class="btn btn-primary btn-block" id="close-all" type="button" disabled>
+        <span data-icon="bookmarkCheck"></span>
+        <span id="close-all-label">Save &amp; close all</span>
+      </button>
+      <button class="icon-btn refresh-button" id="refresh" type="button" aria-label="Refresh readings" title="Refresh readings">
+        <span data-icon="refresh"></span>
+      </button>
+    </div>
+
+    <nav class="popup-tabbar" role="tablist" aria-label="TabYT sections" id="popup-tabbar">
+      <button class="tab-button" id="tab-tabs" type="button" role="tab" aria-selected="true" aria-controls="panel-tabs" data-panel="tabs">
+        Tabs <span class="tab-count" id="tabs-count">0</span>
+      </button>
+      <button class="tab-button" id="tab-saved" type="button" role="tab" aria-selected="false" aria-controls="panel-saved" data-panel="saved">
+        Saved <span class="tab-count" id="saved-count">0</span>
+      </button>
+      <button class="tab-button" id="tab-help" type="button" role="tab" aria-selected="false" aria-controls="panel-help" data-panel="help">
+        Help
+      </button>
+    </nav>
+
+    <div class="popup-panels">
+      <section class="panel" id="panel-tabs" role="tabpanel" aria-labelledby="tab-tabs">
+        <div class="tab-list" id="tab-list"></div>
+        <div class="empty" id="tabs-empty" hidden>
+          <div class="empty-icon" data-icon="playCircle"></div>
+          <strong>No YouTube tabs open</strong>
+          <p>Open a video, then click the TabYT icon to see its memory use, save your place and close tabs in one click.</p>
+          <button class="btn btn-sm" type="button" data-action="refresh">
+            <span data-icon="refresh"></span> Check again
+          </button>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-saved" role="tabpanel" aria-labelledby="tab-saved" hidden>
+        <div class="saved-list" id="saved-list"></div>
+        <div class="empty" id="saved-empty" hidden>
+          <div class="empty-icon" data-icon="bookmark"></div>
+          <strong>No saved videos yet</strong>
+          <p>When you close a YouTube video with TabYT, its title and playback position are ready here for later.</p>
+        </div>
+        <div class="panel-foot" id="saved-foot" hidden>
+          <button class="btn btn-sm btn-ghost" type="button" data-action="open-saved-dashboard">
+            View all saved videos <span data-icon="arrowRight"></span>
+          </button>
+        </div>
+      </section>
+
+      <section class="panel panel-help" id="panel-help" role="tabpanel" aria-labelledby="tab-help" hidden>
+        <div class="help-hero">
+          <span class="help-icon" data-icon="shield"></span>
+          <div>
+            <strong>Private by design</strong>
+            <p>TabYT stores everything on this device. No accounts, no analytics, no network requests.</p>
+          </div>
+        </div>
+        <div class="help-section">
+          <h2>Quick start</h2>
+          <ol class="steps">
+            <li><span>1</span><p>Open YouTube tabs. TabYT lists each tab and an estimated memory reading.</p></li>
+            <li><span>2</span><p>Click <strong>Save &amp; close</strong> on a tab, or close every YouTube tab with one click.</p></li>
+            <li><span>3</span><p>Resume any saved video from the <strong>Saved</strong> tab. Playback picks up where it stopped.</p></li>
+          </ol>
+        </div>
+        <div class="help-section">
+          <h2>Automatic cleanup</h2>
+          <p class="help-text" id="help-auto-close">Auto-close is off. Turn it on in Settings to close idle YouTube tabs after a set time.</p>
+          <div class="help-actions">
+            <button class="btn btn-sm" type="button" data-action="clear-youtube-cache">
+              Clear YouTube cache
+            </button>
+            <button class="btn btn-sm" type="button" data-action="open-settings">
+              <span data-icon="sliders"></span> Open settings
+            </button>
+            <button class="btn btn-sm btn-ghost" type="button" data-action="open-dashboard">
+              Dashboard <span data-icon="external"></span>
+            </button>
+          </div>
+        </div>
+        <div class="help-section">
+          <h2>About the readings</h2>
+          <p class="help-text">Browsers do not expose exact per-tab memory to extensions. TabYT estimates from video quality, playback, buffered media and page complexity, and can use measured process memory where Chrome exposes it. Treat the numbers as a guide for which tabs are heaviest.</p>
+        </div>
+        <p class="help-version" id="help-version">TabYT v1.0.18</p>
+      </section>
+    </div>
+  </main>
+
+  <footer class="popup-footer">
+    <span class="footer-local"><span data-icon="lock"></span> Local only</span>
+    <button class="footer-link" type="button" id="open-dashboard">Open dashboard <span data-icon="arrowRight"></span></button>
+  </footer>
+
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title">
+    <div class="dialog-body">
+      <h2 class="dialog-title" data-dialog-title id="confirm-title">Are you sure?</h2>
+      <p class="dialog-message" data-dialog-message></p>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn" type="button" data-dialog-cancel>Cancel</button>
+      <button class="btn btn-primary" type="button" data-dialog-confirm>Continue</button>
+    </div>
+  </dialog>
+
+  <script src="../lib/core.js"></script>
+  <script src="common.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

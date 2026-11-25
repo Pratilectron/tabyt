@@ -1,0 +1,20 @@
+{
+  "name": "tabyt",
+  "version": "1.0.23",
+  "private": true,
+  "description": "TabYT — a local-only YouTube tab memory manager for Chrome and Firefox.",
+  "license": "MIT",
+  "scripts": {
+    "icons": "node scripts/make-icons.mjs",
+    "build": "npm run icons && node scripts/build.mjs && node scripts/verify.mjs",
+    "package": "npm run icons && node scripts/build.mjs --zip && node scripts/verify.mjs",
+    "verify": "node scripts/verify.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "video-ambient-glow": "^1.2.6"
+  }
+}

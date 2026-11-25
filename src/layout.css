@@ -1,0 +1,1126 @@
+/*
+ * TabYT — watch-page layout.
+ *
+ * Design: a subtle side rail that inherits YouTube's palette and motion —
+ * long-easing transitions (--tabyt-transition) on tabs and related cards.
+ * The player gets a definite height from --tabyt-player-height so metadata
+ * always flows below it rather than overlapping the controls.
+ *
+ * Color tokens inherit from YouTube's own variables so dark / light mode
+ * flip automatically.
+ */
+
+/* ─── Design tokens ───────────────────────────────────────────────────── */
+
+html.tabyt-layout-on {
+  /* YouTube-sourced tokens */
+  --tabyt-bg:        var(--yt-spec-base-background, #0f0f0f);
+  --tabyt-raised:    var(--yt-spec-badge-chip-background, rgba(255,255,255,0.08));
+  --tabyt-text:      var(--yt-spec-text-primary, #f1f1f1);
+  --tabyt-muted:     var(--yt-spec-text-secondary, #aaa);
+  --tabyt-line:      var(--yt-spec-10-percent-layer, rgba(255,255,255,0.1));
+  --tabyt-cta:       var(--yt-spec-call-to-action, #3ea6ff);
+
+  /* TabYT-specific: native palette, elevations and motion */
+  --tabyt-masthead:  56px;
+  --tabyt-radius:    8px;
+  --tabyt-glass:     rgba(255,255,255,0.03);
+  --tabyt-glass-border: rgba(255,255,255,0.06);
+  --tabyt-accent:    #3ea6ff;
+  --tabyt-accent-dim: rgba(62,166,255,0.2);
+  --tabyt-shadow:    0 8px 32px rgba(0,0,0,0.5);
+  --tabyt-tab-active-line: 2px;
+  /* YouTube's own motion curve (cubic-bezier(0.05, 0, 0, 1) on ytd-watch-flexy). */
+  --tabyt-ease:      cubic-bezier(0.05, 0, 0, 1);
+  --tabyt-transition: 200ms var(--tabyt-ease);
+}
+
+/* Light-mode overrides */
+html.tabyt-layout-on:not([dark]) {
+  --tabyt-bg:        var(--yt-spec-base-background, #fff);
+  --tabyt-raised:    var(--yt-spec-badge-chip-background, rgba(0,0,0,0.05));
+  --tabyt-text:      var(--yt-spec-text-primary, #0f0f0f);
+  --tabyt-muted:     var(--yt-spec-text-secondary, #606060);
+  --tabyt-line:      var(--yt-spec-10-percent-layer, rgba(0,0,0,0.1));
+  --tabyt-glass:     rgba(0,0,0,0.02);
+  --tabyt-glass-border: rgba(0,0,0,0.1);
+  --tabyt-shadow:    0 8px 32px rgba(0,0,0,0.12);
+}
+
+/* ─── Shell: lock viewport to avoid double-scrollbar ─────────────────── */
+
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen)),
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen)) body,
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen)) ytd-app {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+
+/* ─── Watch flex root ─────────────────────────────────────────────────── */
+
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) {
+  height: calc(100vh - var(--tabyt-masthead, 56px)) !important;
+  min-height: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  overflow: hidden !important;
+}
+
+/* ─── Columns: horizontal flex strip ─────────────────────────────────── */
+
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #columns {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+}
+
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #primary,
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #secondary {
+  align-self: stretch !important;
+  min-height: 0 !important;
+}
+
+/* ─── Primary (left) column ───────────────────────────────────────────── */
+
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #primary {
+  display: block !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  max-width: calc(100% - var(--tabyt-side, 420px) - 10px) !important;
+  height: 100% !important;
+  padding: 10px clamp(0px, 1vw, 20px) 20px !important;
+  box-sizing: border-box !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  scrollbar-gutter: stable !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: var(--tabyt-raised) transparent !important;
+}
+
+html.tabyt-layout-on ytd-watch-flexy #primary::-webkit-scrollbar {
+  width: 6px;
+}
+
+html.tabyt-layout-on ytd-watch-flexy #primary::-webkit-scrollbar-thumb {
+  border-radius: 6px;
+  background: var(--tabyt-raised);
+}
+
+html.tabyt-layout-on ytd-watch-flexy #primary-inner {
+  position: relative;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  overflow: visible;
+}
+
+/* ─── Player box: definite height so metadata flows below ────────────── */
+/*
+ * ALL player sizing lives behind html.tabyt-player-resize. That class is only
+ * added when the "Player resizing" setting is ON. When it is off (the default)
+ * not one of these rules applies, so YouTube owns the player completely and
+ * the video can never collapse to zero height. The tabs rail still works.
+ *
+ * --tabyt-player-height is set by fitPlayer() in layout.js.
+ * A definite height is REQUIRED: without it, YouTube's percentage-padding
+ * on #player-container-inner adds extra height on top of the box and
+ * pushes the control bar over the metadata below.
+ */
+html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #player {
+  margin: 0 auto !important;
+  width: var(--tabyt-player-width, 100%) !important;
+  height: var(--tabyt-player-height, auto) !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: 100% !important;
+  max-height: none !important;
+  padding: 0 !important;
+  display: block !important;
+  position: relative !important;
+  z-index: 2 !important;
+  overflow: visible !important;
+  /* Subtle glow behind the player */
+  border-radius: var(--tabyt-radius) !important;
+}
+
+/* ─── Player inner chain: fill the definite #player box exactly ──────── */
+
+html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #player-container-outer,
+html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #player-container-inner,
+html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #player-container,
+html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) ytd-player,
+html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #movie_player {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: 100% !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+  overflow: visible !important;
+}
+
+/* Keep controls and gradient visible at the bottom of the player */
+html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #movie_player .ytp-chrome-bottom,
+html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #movie_player .ytp-gradient-bottom {
+  bottom: 0 !important;
+  overflow: visible !important;
+}
+
+html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #movie_player,
+html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) ytd-player,
+html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) .html5-video-player {
+  overflow: visible !important;
+}
+
+html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) .html5-video-container {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) video.html5-main-video {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  left: 0 !important;
+  top: 0 !important;
+  object-fit: contain !important;
+}
+
+/* Metadata / channel row always sits below in normal flow */
+html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #below {
+  position: relative !important;
+  top: auto !important;
+  clear: both !important;
+}
+
+/* ─── Fullscreen: hand everything back to the browser ────────────────── */
+
+html.tabyt-layout-on.tabyt-fullscreen #tabyt-divider,
+html.tabyt-layout-on.tabyt-fullscreen #secondary,
+html.tabyt-layout-on.tabyt-fullscreen #tabyt-ambient,
+html.tabyt-layout-on.tabyt-fullscreen #__tabyt_toast,
+html.tabyt-layout-on:has(:fullscreen) #tabyt-divider,
+html.tabyt-layout-on:has(:fullscreen) #secondary,
+html.tabyt-layout-on:has(:fullscreen) #tabyt-ambient,
+html.tabyt-layout-on:has(:fullscreen) #__tabyt_toast,
+html.tabyt-layout-on:fullscreen #tabyt-divider,
+html.tabyt-layout-on:fullscreen #secondary,
+html.tabyt-layout-on:fullscreen #tabyt-ambient,
+html.tabyt-layout-on:fullscreen #__tabyt_toast,
+html.tabyt-layout-on ytd-watch-flexy[fullscreen] #tabyt-divider,
+html.tabyt-layout-on ytd-watch-flexy[fullscreen] #secondary,
+html.tabyt-layout-on ytd-watch-flexy[fullscreen] #tabyt-ambient,
+html.tabyt-layout-on ytd-watch-flexy[fullscreen] #__tabyt_toast {
+  display: none !important;
+}
+
+html.tabyt-layout-on.tabyt-fullscreen,
+html.tabyt-layout-on.tabyt-fullscreen body,
+html.tabyt-layout-on.tabyt-fullscreen ytd-app,
+html.tabyt-layout-on:fullscreen,
+html.tabyt-layout-on:has(:fullscreen) {
+  overflow: visible !important;
+}
+
+html.tabyt-layout-on.tabyt-fullscreen ytd-watch-flexy,
+html.tabyt-layout-on ytd-watch-flexy[fullscreen],
+html.tabyt-layout-on ytd-watch-flexy:fullscreen,
+html.tabyt-layout-on:fullscreen ytd-watch-flexy,
+html.tabyt-layout-on:has(:fullscreen) ytd-watch-flexy {
+  width: 100vw !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
+  max-height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+}
+
+html.tabyt-layout-on.tabyt-fullscreen ytd-watch-flexy #columns,
+html.tabyt-layout-on.tabyt-fullscreen ytd-watch-flexy #primary,
+html.tabyt-layout-on.tabyt-fullscreen ytd-watch-flexy #primary-inner,
+html.tabyt-layout-on ytd-watch-flexy[fullscreen] #columns,
+html.tabyt-layout-on ytd-watch-flexy[fullscreen] #primary,
+html.tabyt-layout-on ytd-watch-flexy[fullscreen] #primary-inner,
+html.tabyt-layout-on:has(:fullscreen) ytd-watch-flexy #columns,
+html.tabyt-layout-on:has(:fullscreen) ytd-watch-flexy #primary,
+html.tabyt-layout-on:has(:fullscreen) ytd-watch-flexy #primary-inner {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  max-height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+}
+
+html.tabyt-layout-on.tabyt-fullscreen ytd-watch-flexy #player,
+html.tabyt-layout-on.tabyt-fullscreen ytd-watch-flexy #player-container-outer,
+html.tabyt-layout-on.tabyt-fullscreen ytd-watch-flexy #player-container-inner,
+html.tabyt-layout-on.tabyt-fullscreen ytd-watch-flexy #player-container,
+html.tabyt-layout-on.tabyt-fullscreen ytd-watch-flexy ytd-player,
+html.tabyt-layout-on.tabyt-fullscreen ytd-watch-flexy #movie_player,
+html.tabyt-layout-on ytd-watch-flexy[fullscreen] #player,
+html.tabyt-layout-on ytd-watch-flexy[fullscreen] #player-container-outer,
+html.tabyt-layout-on ytd-watch-flexy[fullscreen] #player-container-inner,
+html.tabyt-layout-on ytd-watch-flexy[fullscreen] #player-container,
+html.tabyt-layout-on ytd-watch-flexy[fullscreen] ytd-player,
+html.tabyt-layout-on ytd-watch-flexy[fullscreen] #movie_player,
+html.tabyt-layout-on ytd-watch-flexy #player:fullscreen,
+html.tabyt-layout-on ytd-watch-flexy ytd-player:fullscreen,
+html.tabyt-layout-on ytd-watch-flexy #movie_player:fullscreen,
+html.tabyt-layout-on ytd-watch-flexy #player:-webkit-full-screen,
+html.tabyt-layout-on ytd-watch-flexy ytd-player:-webkit-full-screen,
+html.tabyt-layout-on ytd-watch-flexy #movie_player:-webkit-full-screen {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  overflow: visible !important;
+}
+
+/* Controls pinned at bottom in fullscreen */
+html.tabyt-layout-on.tabyt-fullscreen #movie_player .ytp-chrome-bottom,
+html.tabyt-layout-on ytd-watch-flexy[fullscreen] #movie_player .ytp-chrome-bottom,
+html.tabyt-layout-on:has(:fullscreen) #movie_player .ytp-chrome-bottom,
+html.tabyt-layout-on #movie_player:fullscreen .ytp-chrome-bottom,
+html.tabyt-layout-on #movie_player:-webkit-full-screen .ytp-chrome-bottom {
+  width: calc(100% - 24px) !important;
+  left: 12px !important;
+  bottom: 0 !important;
+  z-index: 2147483647 !important;
+}
+
+/* ─── Ambient background: blurred frame behind the sharp video ──────── */
+
+/*
+ * Two layers inside #player:
+ *   0) #tabyt-ambient - a canvas copy of the current video frame, cover-fit
+ *      to the whole player box, blurred and darkened. It fills letterbox area.
+ *   1) #movie_player - YouTube's real player, untouched and sharp.
+ *
+ * The background is clipped to the player, never spilling into the page, and
+ * all controls (native or TabYT's) stack above both layers.
+ */
+html.tabyt-layout-on ytd-watch-flexy #player {
+  position: relative !important;
+  isolation: isolate !important;
+}
+
+html.tabyt-layout-on #tabyt-ambient {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  border-radius: inherit !important;
+  background: #000 !important;
+}
+
+html.tabyt-layout-on #tabyt-ambient canvas {
+  position: absolute !important;
+  /* Oversize slightly so the blur never fades to the host's black edge. */
+  top: -6% !important;
+  left: -6% !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: 112% !important;
+  height: 112% !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  transform: none !important;
+  opacity: 1 !important;
+  filter: blur(46px) saturate(1.35) brightness(0.78) !important;
+  pointer-events: none !important;
+  border-radius: 0 !important;
+  z-index: 0 !important;
+}
+
+html.tabyt-layout-on ytd-watch-flexy #player,
+html.tabyt-layout-on ytd-watch-flexy ytd-player,
+html.tabyt-layout-on ytd-watch-flexy #movie_player {
+  position: relative;
+  z-index: 1;
+  overflow: visible !important;
+}
+
+/*
+ * YouTube paints its player boxes and the video's letterbox black. With the
+ * ambient layer present those must be transparent, otherwise the canvas would
+ * sit invisible behind an opaque wall. :has() gates this to the exact player
+ * that owns an ambient host, so turning the setting off restores native black.
+ */
+html.tabyt-layout-on ytd-watch-flexy #player:has(#tabyt-ambient),
+html.tabyt-layout-on ytd-watch-flexy #player:has(#tabyt-ambient) ytd-player,
+html.tabyt-layout-on ytd-watch-flexy #player:has(#tabyt-ambient) #movie_player,
+html.tabyt-layout-on ytd-watch-flexy #player:has(#tabyt-ambient) .html5-video-player,
+html.tabyt-layout-on ytd-watch-flexy #player:has(#tabyt-ambient) .html5-video-container,
+html.tabyt-layout-on ytd-watch-flexy #player:has(#tabyt-ambient) video.html5-main-video {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Keep the foreground sharp and above the ambient canvas. */
+html.tabyt-layout-on ytd-watch-flexy video.html5-main-video {
+  z-index: 1 !important;
+}
+
+/* The video keeps its aspect ratio; the ambient canvas fills the leftover. */
+html.tabyt-layout-on ytd-watch-flexy #player:has(#tabyt-ambient) video.html5-main-video {
+  object-fit: contain !important;
+}
+
+/* Controls and overlays always win the stacking order. */
+html.tabyt-layout-on ytd-watch-flexy #movie_player .ytp-chrome-bottom,
+html.tabyt-layout-on ytd-watch-flexy #movie_player .ytp-chrome-top,
+html.tabyt-layout-on ytd-watch-flexy #movie_player .ytp-gradient-bottom,
+html.tabyt-layout-on ytd-watch-flexy #movie_player .ytp-subtitles-renderer,
+html.tabyt-layout-on ytd-watch-flexy #tabyt-player-controls,
+html.tabyt-layout-on ytd-watch-flexy #tabyt-ambient ~ .ytp-caption-window-container {
+  z-index: 40 !important;
+}
+
+/* ─── Secondary (right rail) ─────────────────────────────────────────── */
+
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #secondary {
+  display: flex !important;
+  flex: 0 0 var(--tabyt-side, 420px) !important;
+  flex-direction: column !important;
+  width: var(--tabyt-side, 420px) !important;
+  min-width: 280px !important;
+  max-width: 680px !important;
+  height: 100% !important;
+  padding-top: 0 !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+html.tabyt-layout-on ytd-watch-flexy #secondary-inner {
+  display: flex !important;
+  flex: 1 1 auto !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  width: 100% !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/*
+ * YouTube's own panels (related, chat) live as direct children of #secondary-inner.
+ * They would fight with the rail for height; only the rail participates.
+ */
+html.tabyt-layout-on ytd-watch-flexy #secondary-inner > :not(#tabyt-rail) {
+  display: none !important;
+}
+
+/* ─── Resize handle ───────────────────────────────────────────────────── */
+
+html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen) #tabyt-divider {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+  flex: 0 0 10px !important;
+  align-self: stretch !important;
+  width: 10px !important;
+  cursor: col-resize !important;
+  touch-action: none !important;
+  transition: background var(--tabyt-transition);
+}
+
+/* Settings gate: no handle, no resize cursor, no pointer target when off. */
+html.tabyt-layout-on:not(.tabyt-player-resize) #tabyt-divider {
+  display: none !important;
+  pointer-events: none !important;
+  cursor: default !important;
+}
+
+html.tabyt-layout-on #tabyt-divider::before {
+  content: "";
+  position: absolute;
+  top: 20%;
+  bottom: 20%;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  border-radius: 2px;
+  background: var(--tabyt-glass-border);
+  transition: background var(--tabyt-transition), box-shadow var(--tabyt-transition);
+}
+
+html.tabyt-layout-on #tabyt-divider::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 20px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 40px;
+  border-radius: 2px;
+  background: var(--tabyt-muted);
+  opacity: 0;
+  transition: opacity var(--tabyt-transition);
+}
+
+html.tabyt-layout-on #tabyt-divider:hover::before,
+html.tabyt-layout-on.tabyt-dragging #tabyt-divider::before {
+  background: var(--tabyt-accent);
+  box-shadow: 0 0 8px var(--tabyt-accent-dim);
+}
+
+html.tabyt-layout-on #tabyt-divider:hover::after,
+html.tabyt-layout-on.tabyt-dragging #tabyt-divider::after {
+  opacity: 0.5;
+}
+
+/* ─── Rail shell ─────────────────────────────────────────────────────── */
+
+html.tabyt-layout-on #tabyt-rail {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  margin: 0;
+  border: 0;
+  /* Native YouTube: the details column is transparent — the page shows through. */
+  background: transparent;
+  border-left: 0;
+  color: var(--tabyt-text);
+  overflow: hidden;
+  font-family: "Roboto", "Arial", sans-serif;
+}
+
+/* ─── Live tab: YouTube's own chat frame fills the panel ────────────── */
+
+html.tabyt-layout-on #tabyt-rail .tabyt-panel[data-panel="live"] {
+  padding: 0;
+  overflow: hidden;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-panel[data-panel="live"] .tabyt-empty {
+  margin: 16px 14px;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-panel[data-panel="live"] ytd-live-chat-frame,
+html.tabyt-layout-on #tabyt-rail .tabyt-panel[data-panel="live"] #chat {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-width: 100%;
+}
+
+/* Live streams swap comments for chat, both in the rail and in the page. */
+html.tabyt-layout-on.tabyt-live-stream ytd-watch-flexy ytd-comments {
+  display: none !important;
+}
+
+/* ─── Tab bar ────────────────────────────────────────────────────────── */
+
+html.tabyt-layout-on #tabyt-rail .tabyt-tabbar {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: 0;
+  margin: 0;
+  padding: 0 8px;
+  /* Glass-on-glass strip */
+  background: rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--tabyt-glass-border);
+  position: relative;
+  z-index: 1;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-tab {
+  appearance: none;
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  padding: 11px 6px 9px;
+  border: 0;
+  background: transparent;
+  color: var(--tabyt-muted);
+  font: 500 12px/1 "Roboto", "Arial", sans-serif;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  text-align: center;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color var(--tabyt-transition), background var(--tabyt-transition), transform var(--tabyt-transition);
+  position: relative;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-tab::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 20%;
+  right: 20%;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--tabyt-accent);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform var(--tabyt-transition);
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-tab:hover {
+  color: var(--tabyt-text);
+  background: var(--tabyt-glass);
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-tab:focus-visible {
+  outline: 2px solid var(--tabyt-accent);
+  outline-offset: -3px;
+  border-radius: 4px;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-tab[aria-selected="true"] {
+  color: var(--tabyt-text);
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-tab[aria-selected="true"]::after {
+  transform: scaleX(1);
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-tab[hidden] {
+  display: none;
+}
+
+/* ─── Panel area ─────────────────────────────────────────────────────── */
+
+html.tabyt-layout-on #tabyt-rail .tabyt-panels {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-panel {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  padding: 16px 14px 32px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--tabyt-raised) transparent;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-panel::-webkit-scrollbar {
+  width: 4px;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-panel::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: var(--tabyt-raised);
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-panel:not(.is-active) {
+  display: none;
+}
+
+/* Animated entry: the extension shell renders first; the data slides in and stays visible. */
+html.tabyt-entering #tabyt-rail .tabyt-tabbar,
+html.tabyt-entering #tabyt-rail .tabyt-panels,
+html.tabyt-entering #tabyt-rail .tabyt-related-list,
+html.tabyt-entering #tabyt-rail .tabyt-info-title,
+html.tabyt-entering #tabyt-rail .tabyt-info-meta,
+html.tabyt-entering #tabyt-rail .tabyt-desc-content {
+  opacity: 1;
+  transform: translateY(8px);
+  transition: transform .3s var(--tabyt-ease);
+}
+/* Data lands just after the shell appears: a small stagger, nothing distracting. */
+html.tabyt-entering #tabyt-rail .tabyt-tabbar { transition-delay: 0s; }
+html.tabyt-entering #tabyt-rail .tabyt-panels { transition-delay: .25s; }
+
+/* Respect reduced motion on the watch page: shell appears, data settles instantly. */
+@media (prefers-reduced-motion: reduce) {
+  html.tabyt-layout-on,
+  html.tabyt-layout-on *,
+  html.tabyt-layout-on *::before,
+  html.tabyt-layout-on *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comments,
+html.tabyt-layout-on #tabyt-rail #related,
+html.tabyt-layout-on #tabyt-rail ytd-watch-next-secondary-results-renderer {
+  display: block;
+  max-width: 100%;
+}
+
+/* ─── Info panel: title + description ───────────────────────────────── */
+
+/*
+ * When layoutInfo is on, hide the original nodes in the left column to avoid
+ * duplication. A stable copy sits in the rail and doesn't flicker.
+ */
+html.tabyt-layout-on.tabyt-rail-info ytd-watch-flexy #primary ytd-watch-metadata #title,
+html.tabyt-layout-on.tabyt-rail-info ytd-watch-flexy #primary ytd-watch-metadata #description,
+html.tabyt-layout-on.tabyt-rail-info ytd-watch-flexy #primary ytd-watch-metadata #description-inline-expander,
+html.tabyt-layout-on.tabyt-rail-info ytd-watch-flexy #primary #above-the-fold #title,
+html.tabyt-layout-on.tabyt-rail-info ytd-watch-flexy #primary #description-inline-expander {
+  display: none !important;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-title {
+  margin: 0 0 12px;
+  color: var(--tabyt-text);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-meta {
+  margin: -4px 0 12px;
+  color: var(--tabyt-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc {
+  color: var(--tabyt-muted);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc * {
+  max-width: 100%;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc a {
+  color: var(--tabyt-cta);
+  text-decoration: none;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc a:hover {
+  text-decoration: underline;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc ytd-text-inline-expander,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc #description-inline-expander,
+html.tabyt-layout-on #tabyt-rail .tabyt-desc-text {
+  display: block;
+  max-width: 100%;
+}
+
+/* Our own description expander: the cloned YouTube toggle has no listeners. */
+html.tabyt-layout-on #tabyt-rail .tabyt-desc-content {
+  position: relative;
+  max-height: 4.8em;
+  overflow: hidden;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-desc-content::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1.6em;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--tabyt-bg));
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-desc-expanded .tabyt-desc-content {
+  max-height: none;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-desc-expanded .tabyt-desc-content::after {
+  display: none;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-desc-toggle {
+  appearance: none;
+  margin: 6px 0 0;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--tabyt-text);
+  font: 600 13px/1.4 "Roboto", "Arial", sans-serif;
+  cursor: pointer;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-desc-toggle:hover,
+html.tabyt-layout-on #tabyt-rail .tabyt-desc-toggle:focus-visible {
+  color: var(--tabyt-cta);
+  outline: none;
+}
+
+/* Chapters appended from the native description, so the copy shows the same data. */
+html.tabyt-layout-on #tabyt-rail .tabyt-desc-chapters {
+  margin-top: 8px;
+  color: var(--tabyt-muted);
+  font-size: 12px;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-empty {
+  margin: 12px 0;
+  color: var(--tabyt-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: 0.7;
+}
+
+/* ─── Related videos ─────────────────────────────────────────────────── */
+
+html.tabyt-layout-on #tabyt-rail .tabyt-related-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-related-item {
+  display: grid;
+  grid-template-columns: minmax(100px, 40%) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 6px;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--tabyt-radius);
+  transition: background var(--tabyt-transition), transform var(--tabyt-transition);
+  cursor: pointer;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-related-item:hover {
+  background: var(--tabyt-raised);
+  transform: translateX(2px);
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-related-item img,
+html.tabyt-layout-on #tabyt-rail .tabyt-related-thumb {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--tabyt-raised);
+  display: block;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-related-copy {
+  min-width: 0;
+  padding-top: 2px;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-related-copy strong {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  color: var(--tabyt-text);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-related-copy span {
+  display: block;
+  margin-top: 4px;
+  color: var(--tabyt-muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+/* ─── TabYT player control bar (opt-in) ────────────────────────────── */
+
+html.tabyt-custom-controls #movie_player .ytp-chrome-bottom,
+html.tabyt-custom-controls #movie_player .ytp-gradient-bottom,
+html.tabyt-custom-controls #movie_player .ytp-chrome-top {
+  display: none !important;
+}
+
+html.tabyt-custom-controls #movie_player {
+  cursor: default;
+}
+
+.tabyt-player-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  padding: 18px 14px 8px;
+  color: #fff;
+  font-family: "Roboto", "Arial", sans-serif;
+  font-size: 12px;
+  background: linear-gradient(to top, rgba(0,0,0,.88), rgba(0,0,0,.5) 55%, transparent);
+  user-select: none;
+  -webkit-user-select: none;
+  transition: opacity .22s ease, transform .22s ease;
+}
+
+/* Idle auto-hide: mouse movement over the player brings it straight back. */
+html.tabyt-custom-controls .tabyt-player-controls.tabyt-bar-hidden {
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+}
+
+.tabyt-pc-progress {
+  position: relative;
+  height: 4px;
+  margin: 0 0 8px;
+  border-radius: 3px;
+  background: rgba(255,255,255,.3);
+  cursor: pointer;
+  touch-action: none;
+}
+
+.tabyt-pc-progress:hover {
+  height: 6px;
+}
+
+.tabyt-pc-buffered,
+.tabyt-pc-played {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.tabyt-pc-buffered { background: rgba(255,255,255,.38); }
+.tabyt-pc-played { background: #ff2d4b; z-index: 1; }
+
+.tabyt-pc-knob {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  box-shadow: 0 0 5px rgba(0,0,0,.6);
+  pointer-events: none;
+}
+
+.tabyt-pc-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tabyt-pc-btn {
+  flex: 0 0 auto;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  font: 600 12px/1 "Roboto", "Arial", sans-serif;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+
+.tabyt-pc-btn:hover,
+.tabyt-pc-btn:focus-visible {
+  background: rgba(255,255,255,.18);
+  outline: none;
+}
+
+.tabyt-pc-time {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  color: #f1f1f1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tabyt-pc-space { flex: 1 1 auto; }
+
+.tabyt-pc-volume {
+  flex: 0 0 auto;
+  width: 78px;
+  margin: 0 4px;
+  accent-color: #ff2d4b;
+  cursor: pointer;
+}
+
+/* ─── Responsive layout ─────────────────────────────────────────────── */
+
+/*
+ * The desktop rules above use !important on flex-direction / flex-wrap, so a
+ * narrow rule without !important never took effect. Every override below is
+ * explicitly gated to non-fullscreen, non-iframe watch pages and carries the
+ * same priority, so the player can never be trapped in a two-column strip.
+ */
+@media (min-width: 981px) and (max-width: 1180px) {
+  html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+    ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #primary {
+    max-width: calc(100% - 300px - 10px) !important;
+  }
+
+  html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+    ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #secondary {
+    flex-basis: 300px !important;
+    width: 300px !important;
+  }
+}
+
+@media (max-width: 980px) {
+  html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen)),
+  html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen)) body,
+  html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen)) ytd-app {
+    overflow: auto !important;
+    overscroll-behavior: auto !important;
+  }
+
+  html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+    ytd-watch-flexy:not([fullscreen]):not(:fullscreen) {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+    ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #columns {
+    display: flex !important;
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+    ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #primary {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    padding: 0 0 16px !important;
+    overflow: visible !important;
+  }
+
+  html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+    ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #secondary {
+    display: flex !important;
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: min(70vh, 620px) !important;
+    padding-top: 0;
+    overflow: hidden !important;
+  }
+
+  html.tabyt-layout-on:not(.tabyt-fullscreen) #tabyt-divider {
+    display: none !important;
+  }
+
+  html.tabyt-layout-on #tabyt-rail {
+    border-left: none;
+    border-top: 1px solid var(--tabyt-glass-border);
+  }
+
+  html.tabyt-layout-on.tabyt-player-resize
+    ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #player {
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 640px) {
+  html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+    ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #primary {
+    padding: 0 0 10px !important;
+  }
+
+  html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+    ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #secondary {
+    height: 60vh !important;
+  }
+
+  html.tabyt-layout-on #tabyt-rail .tabyt-tabbar {
+    padding: 0 4px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  html.tabyt-layout-on #tabyt-rail .tabyt-tabbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  html.tabyt-layout-on #tabyt-rail .tabyt-tab {
+    flex: 0 0 auto;
+  }
+
+  .tabyt-pc-btn[data-action="back"],
+  .tabyt-pc-btn[data-action="forward"],
+  .tabyt-pc-btn[data-action="audio"],
+  .tabyt-pc-btn[data-action="theater"] {
+    display: none;
+  }
+
+  .tabyt-pc-volume { width: 52px; }
+  .tabyt-player-controls { padding: 14px 10px 6px; }
+}

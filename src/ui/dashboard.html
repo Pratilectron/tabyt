@@ -1,0 +1,737 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TabYT Dashboard</title>
+  <link rel="icon" href="../icons/icon32.png">
+  <link rel="stylesheet" href="common.css">
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand sidebar-brand" href="#overview" aria-label="TabYT dashboard home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/></svg>
+        </span>
+        <span class="brand-name"><strong>TabYT</strong><span>Memory manager</span></span>
+      </a>
+
+      <nav class="side-nav" aria-label="Dashboard sections">
+        <button class="nav-item" type="button" data-route="overview" aria-current="page">
+          <span data-icon="dashboard"></span><span class="nav-label">Overview</span>
+        </button>
+        <button class="nav-item" type="button" data-route="tabs">
+          <span data-icon="layers"></span><span class="nav-label">YouTube tabs</span><span class="nav-count" id="nav-tabs-count">0</span>
+        </button>
+        <button class="nav-item" type="button" data-route="saved">
+          <span data-icon="bookmark"></span><span class="nav-label">Saved videos</span><span class="nav-count" id="nav-saved-count">0</span>
+        </button>
+        <button class="nav-item" type="button" data-route="history">
+          <span data-icon="history"></span><span class="nav-label">History</span>
+        </button>
+        <button class="nav-item" type="button" data-route="settings">
+          <span data-icon="sliders"></span><span class="nav-label">Settings</span>
+        </button>
+        <button class="nav-item" type="button" data-route="help">
+          <span data-icon="help"></span><span class="nav-label">Help</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <div class="privacy-pill"><span data-icon="lock"></span> Everything stays local</div>
+        <p class="sidebar-version" id="sidebar-version">v1.0.18</p>
+      </div>
+    </aside>
+
+    <div class="main-wrap">
+      <header class="topbar">
+        <div class="page-heading">
+          <h1 id="page-title">Overview</h1>
+          <p id="page-subtitle">Which YouTube tabs are using memory right now.</p>
+        </div>
+        <div class="topbar-actions">
+          <span class="memory-pill" id="memory-pill" title="Current YouTube tab memory">
+            <i class="dot" id="memory-pill-dot" aria-hidden="true"></i>
+            <span id="memory-pill-text">—</span>
+          </span>
+          <span class="settings-status" id="settings-status" hidden><span data-icon="check"></span> Saved</span>
+          <button class="icon-btn" id="global-refresh" type="button" aria-label="Refresh readings" title="Refresh readings">
+            <span data-icon="refresh"></span>
+          </button>
+        </div>
+      </header>
+
+      <main class="main-content" id="main">
+        <div class="top-error" id="top-error" role="alert" hidden>
+          <span data-icon="alert"></span>
+          <span class="grow" id="top-error-text"></span>
+          <button class="btn btn-sm" type="button" id="top-error-retry">Retry</button>
+        </div>
+
+        <!-- Overview -->
+        <section class="view" id="view-overview" data-view="overview">
+          <div id="welcome-slot"></div>
+          <div id="overview-alert"></div>
+
+          <section class="now-panel" aria-labelledby="now-heading">
+            <div class="now-readout">
+              <h2 class="now-kicker" id="now-heading">YouTube memory now</h2>
+              <div class="now-figure">
+                <strong class="now-value" id="stat-memory">—</strong>
+                <span class="badge" id="stat-memory-source">Estimated</span>
+              </div>
+              <p class="stat-note" id="stat-memory-note">Across your open YouTube tabs</p>
+              <div class="progress stat-progress" id="stat-limit-progress"><span id="stat-limit-fill" style="width:0%"></span></div>
+              <p class="now-limit">
+                <span id="stat-limit-pct">—</span>
+                <span class="badge" id="stat-limit-badge">No limit</span>
+                <span id="stat-limit-note">Set a limit in Settings</span>
+              </p>
+            </div>
+            <ul class="now-facts">
+              <li>
+                <span class="now-fact-label">Open tabs</span>
+                <strong id="stat-tabs">—</strong>
+                <span class="stat-note" id="stat-tabs-note">Checking your browser…</span>
+              </li>
+              <li>
+                <span class="now-fact-label">Saved to resume</span>
+                <strong id="stat-saved">—</strong>
+                <span class="stat-note" id="stat-saved-note">Titles and positions kept locally</span>
+              </li>
+            </ul>
+          </section>
+
+          <section class="work-panel">
+            <div class="panel-head">
+              <div>
+                <h2>Heaviest open tabs</h2>
+                <p>Ranked by memory. Switch to one, or open the full list to save and close.</p>
+              </div>
+              <button class="btn btn-sm" type="button" data-route="tabs">Open tab list <span data-icon="arrowRight"></span></button>
+            </div>
+            <div class="ranking" id="largest-list"></div>
+          </section>
+
+          <div class="support-grid">
+            <section class="support-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Resume</h2>
+                  <p>Positions saved the last time TabYT closed a video.</p>
+                </div>
+                <button class="btn btn-sm btn-ghost" type="button" data-route="saved">All saved <span data-icon="arrowRight"></span></button>
+              </div>
+              <div class="recent-saves" id="recent-saved"></div>
+            </section>
+            <section class="support-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Since yesterday</h2>
+                  <p id="trend-sub">Last 24 hours</p>
+                </div>
+                <span class="badge" id="trend-peak">No samples yet</span>
+              </div>
+              <div class="sparkline-wrap" id="trend-chart">
+                <div class="empty compact">
+                  <div class="empty-icon"><span data-icon="activity"></span></div>
+                  <strong>No history yet</strong>
+                  <p>TabYT samples memory on a timer. The first point appears after the next sample.</p>
+                </div>
+              </div>
+              <div class="support-more">
+                <button class="btn btn-sm btn-ghost" type="button" data-route="history">Full history <span data-icon="arrowRight"></span></button>
+              </div>
+            </section>
+          </div>
+
+          <div class="overview-foot">
+            <p id="stats-line">Local-only monitoring · no accounts, no analytics.</p>
+            <div class="row">
+              <button class="btn btn-sm" type="button" data-route="settings"><span data-icon="settings"></span> Settings</button>
+              <button class="btn btn-sm btn-ghost" type="button" data-route="help"><span data-icon="help"></span> How it works</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tabs -->
+        <section class="view" id="view-tabs" data-view="tabs" hidden>
+          <div class="toolbar card card-pad">
+            <div class="toolbar-search">
+              <div class="input-wrap">
+                <span data-icon="search"></span>
+                <input class="input has-icon" id="tab-search" type="search" placeholder="Search open tabs" autocomplete="off" aria-label="Search open tabs">
+              </div>
+            </div>
+            <div class="toolbar-group">
+              <label class="sr-only" for="tab-sort">Sort tabs</label>
+              <select class="select toolbar-select" id="tab-sort">
+                <option value="memory">Memory: high to low</option>
+                <option value="lastActive">Last active: oldest first</option>
+                <option value="title">Title: A to Z</option>
+              </select>
+              <button class="btn" id="tabs-refresh" type="button"><span data-icon="refresh"></span> Refresh</button>
+              <button class="btn btn-primary" id="tabs-close-all" type="button"><span data-icon="bookmarkCheck"></span> Save &amp; close all</button>
+            </div>
+          </div>
+          <div class="card table-card">
+            <div class="table-scroll" id="tabs-table"></div>
+          </div>
+          <p class="view-note"><span data-icon="info"></span> Memory figures are estimates unless your browser exposes measured process memory. Closing with TabYT always keeps the video title and playback position.</p>
+        </section>
+
+        <!-- Saved -->
+        <section class="view" id="view-saved" data-view="saved" hidden>
+          <div class="toolbar card card-pad">
+            <div class="input-wrap toolbar-search">
+              <span data-icon="search"></span>
+              <input class="input has-icon" id="saved-search" type="search" placeholder="Search saved videos" autocomplete="off" aria-label="Search saved videos">
+            </div>
+            <div class="toolbar-group">
+              <label class="sr-only" for="saved-sort">Sort saved videos</label>
+              <select class="select toolbar-select" id="saved-sort">
+                <option value="recent">Newest saved</option>
+                <option value="position">Longest watched</option>
+                <option value="title">Title: A to Z</option>
+              </select>
+              <button class="btn btn-ghost" id="saved-clear" type="button"><span data-icon="trash"></span> Clear all</button>
+            </div>
+          </div>
+          <div class="saved-grid" id="saved-grid"></div>
+        </section>
+
+        <!-- History -->
+        <section class="view" id="view-history" data-view="history" hidden>
+          <div class="toolbar card card-pad">
+            <div class="segmented" id="history-range" role="group" aria-label="History range">
+              <button type="button" data-range="24h" aria-pressed="true">24 hours</button>
+              <button type="button" data-range="7d" aria-pressed="false">7 days</button>
+              <button type="button" data-range="all" aria-pressed="false">All</button>
+            </div>
+            <div class="toolbar-group">
+              <span class="badge" id="history-sample-info">Samples every 10 min</span>
+              <button class="btn btn-ghost" id="history-clear" type="button"><span data-icon="trash"></span> Clear history</button>
+            </div>
+          </div>
+
+          <div class="stat-grid stat-grid-3">
+            <article class="card stat-card">
+              <div class="stat-label"><span data-icon="activity"></span> Peak memory</div>
+              <div class="stat-value" id="history-peak">—</div>
+              <p class="stat-note">Highest combined reading</p>
+            </article>
+            <article class="card stat-card">
+              <div class="stat-label"><span data-icon="chip"></span> Average</div>
+              <div class="stat-value" id="history-average">—</div>
+              <p class="stat-note">Across the selected range</p>
+            </article>
+            <article class="card stat-card">
+              <div class="stat-label"><span data-icon="history"></span> Samples</div>
+              <div class="stat-value" id="history-count">—</div>
+              <p class="stat-note" id="history-range-note">No samples yet</p>
+            </article>
+          </div>
+
+          <article class="card chart-card">
+            <div class="card-head">
+              <div>
+                <h2 class="card-title">YouTube tab memory over time</h2>
+                <p class="card-sub" id="chart-sub">Combined estimated memory of YouTube tabs</p>
+              </div>
+              <div class="chart-legend">
+                <span><i class="legend-line"></i> Memory</span>
+                <span><i class="legend-line limit"></i> Limit</span>
+              </div>
+            </div>
+            <div class="chart-wrap" id="history-chart"></div>
+          </article>
+
+          <div class="history-grid">
+            <article class="card">
+              <div class="card-head">
+                <div>
+                  <h2 class="card-title">Biggest offenders</h2>
+                  <p class="card-sub">Ranked by contribution across sampled readings</p>
+                </div>
+              </div>
+              <div class="table-scroll" id="offenders-table"></div>
+            </article>
+            <article class="card">
+              <div class="card-head">
+                <div>
+                  <h2 class="card-title">Recent readings</h2>
+                  <p class="card-sub">The latest memory samples</p>
+                </div>
+              </div>
+              <div class="table-scroll" id="samples-table"></div>
+            </article>
+          </div>
+          <p class="view-note"><span data-icon="info"></span> History is sampled on this device and never uploaded. Samples are kept for <span id="retention-note">7 days</span>.</p>
+        </section>
+
+        <!-- Settings -->
+        <section class="view" id="view-settings" data-view="settings" hidden>
+          <div class="settings-layout" id="settings-layout">
+            <div class="settings-main">
+              <section class="card settings-section">
+                <div class="settings-head">
+                  <div>
+                    <h2 class="card-title">Watch layout</h2>
+                    <p class="card-sub">A fixed watch shell: the player and metadata scroll in the left column, while details, comments and recommendations live in tabs that scroll on the right. Drag the divider to share the width.</p>
+                  </div>
+                  <span class="badge" id="layout-badge">On</span>
+                </div>
+                <div class="settings-body">
+                  <label class="switch">
+                    <input type="checkbox" data-setting="layoutEnabled">
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                    <span class="switch-copy">
+                      <strong>Use the TabYT watch layout</strong>
+                      <span>Applies on any YouTube watch or live page, including when you move between videos. The player fits the column, and both columns scroll independently instead of the document.</span>
+                    </span>
+                  </label>
+                  <label class="switch">
+                    <input type="checkbox" data-setting="layoutInfo">
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                    <span class="switch-copy">
+                      <strong>Info</strong>
+                      <span>Title and description in the right panel.</span>
+                    </span>
+                  </label>
+                  <label class="switch">
+                    <input type="checkbox" data-setting="layoutComments">
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                    <span class="switch-copy">
+                      <strong>Comments</strong>
+                      <span>Comments scroll inside their own tab, without moving the player or the rest of the page.</span>
+                    </span>
+                  </label>
+                  <label class="switch">
+                    <input type="checkbox" data-setting="layoutOther">
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                    <span class="switch-copy">
+                      <strong>Other videos</strong>
+                      <span>YouTube’s sidebar recommendations.</span>
+                    </span>
+                  </label>
+                  <label class="switch">
+                    <input type="checkbox" data-setting="layoutRelated">
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                    <span class="switch-copy">
+                      <strong>Related</strong>
+                      <span>Videos related to the one that is playing.</span>
+                    </span>
+                  </label>
+                  <label class="switch">
+                    <input type="checkbox" data-setting="layoutAmbient">
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                    <span class="switch-copy">
+                      <strong>Ambient player background</strong>
+                      <span>A blurred glow behind the player, colored from the video that is playing.</span>
+                    </span>
+                  </label>
+                  <label class="switch">
+                    <input type="checkbox" data-setting="layoutChat">
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                    <span class="switch-copy">
+                      <strong>Live chat</strong>
+                      <span>YouTube's chat frame appears in the Live tab. Turn off to hide it.</span>
+                    </span>
+                  </label>
+                  <label class="switch">
+                    <input type="checkbox" data-setting="layoutLive">
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                    <span class="switch-copy">
+                      <strong>Live tab</strong>
+                      <span>Shows live chat as a tab. Comments are hidden on live streams.</span>
+                    </span>
+                  </label>
+                  <label class="switch">
+                    <input type="checkbox" data-setting="playerResize">
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                    <span class="switch-copy">
+                      <strong>Player resizing</strong>
+                      <span>Player fills the left column (theater mode). Disable to keep YouTube player at native dimensions.</span>
+                    </span>
+                  </label>
+                  <label class="switch">
+                    <input type="checkbox" data-setting="customControls">
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                    <span class="switch-copy">
+                      <strong>TabYT player controls</strong>
+                      <span>Custom on-screen bar with play/pause, seeking, volume, speed, quality, captions, audio track, theater and fullscreen. Turn off to use YouTube's native controls.</span>
+                    </span>
+                  </label>
+                  <div class="button-row">
+                    <button class="btn" type="button" data-action="clear-youtube-cache">Clear YouTube cache and reload</button>
+                  </div>
+                  <p class="field-hint">Clears the HTTP cache and Cache Storage for YouTube only. Cookies are not removed, so you stay signed in. The open YouTube tab then reloads.</p>
+                </div>
+              </section>
+
+              <section class="card settings-section">
+                <div class="settings-head">
+                  <div>
+                    <h2 class="card-title">Memory alerts</h2>
+                    <p class="card-sub">Set the ceiling for all your YouTube tabs combined.</p>
+                  </div>
+                  <span class="badge" id="limit-badge">1.5 GB</span>
+                </div>
+                <div class="settings-body">
+                  <div class="field-row">
+                    <div class="field">
+                      <label class="field-label" for="setting-memoryLimitMB">Memory limit</label>
+                      <div class="input-wrap">
+                        <input class="input" id="setting-memoryLimitMB" type="number" inputmode="numeric" min="0" max="65536" step="50" data-setting="memoryLimitMB">
+                        <span class="input-suffix">MB</span>
+                      </div>
+                      <p class="field-hint">Use 0 to turn the limit and limit alerts off. Default is 1,500 MB.</p>
+                    </div>
+                    <div class="preset-row" aria-label="Memory limit presets">
+                      <button class="btn btn-sm" type="button" data-preset="memoryLimitMB" data-value="1024">1 GB</button>
+                      <button class="btn btn-sm" type="button" data-preset="memoryLimitMB" data-value="2048">2 GB</button>
+                      <button class="btn btn-sm" type="button" data-preset="memoryLimitMB" data-value="4096">4 GB</button>
+                      <button class="btn btn-sm" type="button" data-preset="memoryLimitMB" data-value="0">Off</button>
+                    </div>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" data-setting="notifyOverLimit">
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                    <span class="switch-copy">
+                      <strong>Notify me when I go over the limit</strong>
+                      <span>TabYT shows a browser notification, at most once per cooldown period.</span>
+                    </span>
+                  </label>
+                  <div class="field-row">
+                    <div class="field">
+                      <label class="field-label" for="setting-memoryAction">When over the limit</label>
+                      <select class="select" id="setting-memoryAction" data-setting="memoryAction">
+                        <option value="notify">Notify me only</option>
+                        <option value="close">Close the least recently used tabs</option>
+                      </select>
+                      <p class="field-hint">Automatic cleanup never closes the active tab, pinned tabs, audible tabs or playing videos when those protections are enabled.</p>
+                    </div>
+                    <div class="field">
+                      <label class="field-label" for="setting-notifyCooldownMinutes">Notification cooldown</label>
+                      <div class="input-wrap">
+                        <input class="input" id="setting-notifyCooldownMinutes" type="number" inputmode="numeric" min="5" max="1440" step="5" data-setting="notifyCooldownMinutes">
+                        <span class="input-suffix">min</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="card settings-section">
+                <div class="settings-head">
+                  <div>
+                    <h2 class="card-title">Inactive tabs</h2>
+                    <p class="card-sub">Let TabYT tidy up YouTube tabs you have stopped using.</p>
+                  </div>
+                  <span class="badge" id="auto-close-badge">Off</span>
+                </div>
+                <div class="settings-body">
+                  <label class="switch">
+                    <input type="checkbox" data-setting="autoClose">
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                    <span class="switch-copy">
+                      <strong>Auto-close inactive YouTube tabs</strong>
+                      <span>Checked once per minute. Closing a tab saves its video title and playback position when saving is enabled.</span>
+                    </span>
+                  </label>
+                  <div class="field-row">
+                    <div class="field">
+                      <label class="field-label" for="setting-inactivityMinutes">Close after</label>
+                      <div class="input-wrap">
+                        <input class="input" id="setting-inactivityMinutes" type="number" inputmode="numeric" min="5" max="1440" step="5" data-setting="inactivityMinutes">
+                        <span class="input-suffix">min</span>
+                      </div>
+                      <p class="field-hint">Minimum 5 minutes. Default is 30 minutes.</p>
+                    </div>
+                    <div class="preset-row" aria-label="Inactivity presets">
+                      <button class="btn btn-sm" type="button" data-preset="inactivityMinutes" data-value="15">15m</button>
+                      <button class="btn btn-sm" type="button" data-preset="inactivityMinutes" data-value="30">30m</button>
+                      <button class="btn btn-sm" type="button" data-preset="inactivityMinutes" data-value="60">1h</button>
+                      <button class="btn btn-sm" type="button" data-preset="inactivityMinutes" data-value="120">2h</button>
+                    </div>
+                  </div>
+                  <div class="protection-grid">
+                    <label class="switch compact-switch">
+                      <input type="checkbox" data-setting="skipPinned">
+                      <span class="switch-track"><span class="switch-thumb"></span></span>
+                      <span class="switch-copy"><strong>Keep pinned tabs</strong><span>Never auto-close pinned tabs.</span></span>
+                    </label>
+                    <label class="switch compact-switch">
+                      <input type="checkbox" data-setting="skipAudible">
+                      <span class="switch-track"><span class="switch-thumb"></span></span>
+                      <span class="switch-copy"><strong>Keep audio tabs</strong><span>Never auto-close a tab playing sound.</span></span>
+                    </label>
+                    <label class="switch compact-switch">
+                      <input type="checkbox" data-setting="skipPlaying">
+                      <span class="switch-track"><span class="switch-thumb"></span></span>
+                      <span class="switch-copy"><strong>Keep playing videos</strong><span>Never auto-close a tab where video is playing.</span></span>
+                    </label>
+                  </div>
+                  <div class="field-row">
+                    <div class="field">
+                      <label class="field-label" for="setting-maxAutoClosePerRun">Maximum closures per check</label>
+                      <input class="input" id="setting-maxAutoClosePerRun" type="number" inputmode="numeric" min="1" max="10" step="1" data-setting="maxAutoClosePerRun">
+                      <p class="field-hint">Keeps a cleanup run from closing too many tabs at once. Default is 3.</p>
+                    </div>
+                    <label class="switch compact-switch">
+                      <input type="checkbox" data-setting="autoCloseNotifications">
+                      <span class="switch-track"><span class="switch-thumb"></span></span>
+                      <span class="switch-copy"><strong>Notify after auto-close</strong><span>Show a notification when tabs are closed automatically.</span></span>
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              <section class="card settings-section">
+                <div class="settings-head">
+                  <div>
+                    <h2 class="card-title">History &amp; storage</h2>
+                    <p class="card-sub">Choose how much local memory history TabYT keeps.</p>
+                  </div>
+                </div>
+                <div class="settings-body">
+                  <div class="field-row">
+                    <div class="field">
+                      <label class="field-label" for="setting-historySampleMinutes">Sample every</label>
+                      <select class="select" id="setting-historySampleMinutes" data-setting="historySampleMinutes">
+                        <option value="5">5 minutes</option>
+                        <option value="10">10 minutes</option>
+                        <option value="30">30 minutes</option>
+                        <option value="60">60 minutes</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label class="field-label" for="setting-historyRetentionDays">Keep history for</label>
+                      <select class="select" id="setting-historyRetentionDays" data-setting="historyRetentionDays">
+                        <option value="1">1 day</option>
+                        <option value="7">7 days</option>
+                        <option value="14">14 days</option>
+                        <option value="30">30 days</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="danger-row">
+                    <div>
+                      <strong>Clear memory history</strong>
+                      <p>Remove all samples and reset the peak reading. Saved videos are not affected.</p>
+                    </div>
+                    <button class="btn btn-sm" type="button" data-action="clear-history"><span data-icon="trash"></span> Clear history</button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="card settings-section">
+                <div class="settings-head">
+                  <div>
+                    <h2 class="card-title">Restore &amp; data</h2>
+                    <p class="card-sub">Control how closing and resuming videos works.</p>
+                  </div>
+                </div>
+                <div class="settings-body">
+                  <label class="switch">
+                    <input type="checkbox" data-setting="saveOnClose">
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                    <span class="switch-copy">
+                      <strong>Save playback position when closing</strong>
+                      <span>When off, the normal close buttons will not create a saved entry. “Save &amp; close” always saves.</span>
+                    </span>
+                  </label>
+                  <label class="switch">
+                    <input type="checkbox" data-setting="resumeExistingTab">
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                    <span class="switch-copy">
+                      <strong>Reuse an already-open tab when resuming</strong>
+                      <span>If the same video is open in another tab, switch to it and seek to the saved position instead of opening a duplicate.</span>
+                    </span>
+                  </label>
+                  <label class="switch">
+                    <input type="checkbox" data-setting="askBeforeCloseAll">
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                    <span class="switch-copy">
+                      <strong>Ask before closing all tabs</strong>
+                      <span>Show a confirmation before closing every YouTube tab at once.</span>
+                    </span>
+                  </label>
+                  <div class="field-row">
+                    <div class="field">
+                      <label class="field-label" for="setting-maxSavedVideos">Maximum saved videos</label>
+                      <input class="input" id="setting-maxSavedVideos" type="number" inputmode="numeric" min="25" max="1000" step="25" data-setting="maxSavedVideos">
+                      <p class="field-hint">Oldest entries are removed when this limit is reached. Default is 300.</p>
+                    </div>
+                  </div>
+                  <div class="button-row">
+                    <button class="btn" type="button" data-action="export"><span data-icon="download"></span> Export my data</button>
+                    <button class="btn btn-ghost" type="button" data-action="clear-saved"><span data-icon="trash"></span> Clear saved videos</button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="card settings-section">
+                <div class="settings-head">
+                  <div>
+                    <h2 class="card-title">Readings</h2>
+                    <p class="card-sub">How TabYT measures memory, and what your browser allows.</p>
+                  </div>
+                  <span class="badge" id="precise-badge">Estimated</span>
+                </div>
+                <div class="settings-body">
+                  <div class="notice" id="precise-notice">
+                    <span data-icon="info"></span>
+                    <span id="precise-note">Browsers do not expose exact per-tab memory to extensions. TabYT estimates memory from video quality, playback, buffered media and page complexity.</span>
+                  </div>
+                  <div class="precise-row" id="precise-row">
+                    <div>
+                      <strong>Precise process readings</strong>
+                      <p id="precise-description">When Chrome exposes the Processes API, TabYT can use measured renderer memory instead of estimates.</p>
+                    </div>
+                    <button class="btn btn-sm" id="precise-button" type="button">Enable</button>
+                  </div>
+                  <p class="field-hint">The Chrome Processes API is currently available only on builds that expose it (typically Dev/Canary channel). Firefox does not provide per-tab memory to extensions, so estimates are used there.</p>
+                </div>
+              </section>
+
+              <section class="card settings-section danger-zone">
+                <div class="settings-head">
+                  <div>
+                    <h2 class="card-title">Privacy &amp; local data</h2>
+                    <p class="card-sub">TabYT never uploads your data. You can remove it at any time.</p>
+                  </div>
+                </div>
+                <div class="settings-body">
+                  <div class="privacy-note">
+                    <span data-icon="shield"></span>
+                    <p><strong>No personal data collection.</strong> TabYT only reads YouTube tab titles, URLs and player state, and stores settings, saved positions and memory samples in your browser's local storage. It makes no network requests for analytics or account data.</p>
+                  </div>
+                  <div class="danger-actions">
+                    <button class="btn btn-ghost" type="button" data-action="reset-settings">Reset settings</button>
+                    <button class="btn btn-danger" type="button" data-action="delete-all"><span data-icon="trash"></span> Delete all local data</button>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <aside class="settings-aside">
+              <div class="card card-pad settings-help">
+                <h2 class="card-title">Good to know</h2>
+                <ul class="check-list">
+                  <li><span data-icon="check"></span> Auto-close checks once per minute.</li>
+                  <li><span data-icon="check"></span> Active, pinned and playing tabs can be protected.</li>
+                  <li><span data-icon="check"></span> Closing with TabYT saves the video title and timestamp.</li>
+                  <li><span data-icon="check"></span> History and saved videos stay on this device.</li>
+                </ul>
+                <button class="btn btn-sm btn-outline btn-block" type="button" data-route="help">Read the full guide</button>
+              </div>
+              <div class="card card-pad settings-help">
+                <h2 class="card-title">Storage</h2>
+                <p class="storage-line"><span>Saved videos</span> <strong id="storage-saved">0</strong></p>
+                <p class="storage-line"><span>History samples</span> <strong id="storage-history">0</strong></p>
+                <p class="storage-line"><span>Limit</span> <strong id="storage-limit">—</strong></p>
+                <button class="btn btn-sm btn-ghost btn-block" type="button" data-action="refresh">Refresh readings</button>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <!-- Help -->
+        <section class="view help-view" id="view-help" data-view="help" hidden>
+          <div class="help-intro card">
+            <div class="help-intro-icon"><span data-icon="playCircle"></span></div>
+            <div>
+              <h2>TabYT in three steps</h2>
+              <p>See how much memory your YouTube tabs use, close them without losing your place, and get them back when you are ready.</p>
+            </div>
+          </div>
+
+          <div class="help-grid">
+            <article class="card card-pad help-card">
+              <span class="help-number">1</span>
+              <h3>Review your tabs</h3>
+              <p>Click the TabYT icon in your toolbar. Every YouTube tab appears with its title, playback state, last activity and an estimated memory reading. The largest tabs are easiest to spot.</p>
+            </article>
+            <article class="card card-pad help-card">
+              <span class="help-number">2</span>
+              <h3>Close without losing your place</h3>
+              <p>Use <strong>Save &amp; close</strong> on a tab or <strong>Save &amp; close all</strong> to tidy up. TabYT records the video title and current playback position before closing. A normal close also saves when the setting is on.</p>
+            </article>
+            <article class="card card-pad help-card">
+              <span class="help-number">3</span>
+              <h3>Resume anytime</h3>
+              <p>Open <strong>Saved videos</strong> and press resume. TabYT opens the video and seeks back to the saved timestamp, reusing an existing tab when possible.</p>
+            </article>
+          </div>
+
+          <div class="help-columns">
+            <article class="card card-pad">
+              <h3 class="help-heading">How the memory readings work</h3>
+              <p>Stable browsers do not expose exact per-tab memory to extensions. TabYT estimates each tab's memory from the video resolution, whether the video is playing, buffered media, page DOM size and the JavaScript heap where available. The result is a relative guide to which tabs are heaviest, not a replacement for the browser Task Manager.</p>
+              <div class="notice info">
+                <span data-icon="info"></span>
+                <span>Chrome builds that expose the Processes API can optionally report measured renderer memory. Firefox uses estimates because it does not provide this data to extensions.</span>
+              </div>
+            </article>
+            <article class="card card-pad">
+              <h3 class="help-heading">Auto-close rules</h3>
+              <p>When enabled, TabYT checks once per minute. A tab is closed only if it is a background YouTube tab, has been inactive past your threshold, and does not match a protection: pinned, audible or playing. The current tab in a focused window is never auto-closed.</p>
+              <p class="muted">Clicking, typing, scrolling, switching to the tab or starting playback resets its inactivity timer. A tab whose window is minimized or unfocused can be closed once the threshold passes.</p>
+            </article>
+            <article class="card card-pad">
+              <h3 class="help-heading">Memory limits and alerts</h3>
+              <p>The limit applies to the combined estimated memory of all open YouTube tabs. When it is crossed, TabYT can show a browser notification and, if you choose, close the least recently used eligible tabs. Alerts respect the cooldown so they do not become noisy.</p>
+            </article>
+            <article class="card card-pad">
+              <h3 class="help-heading">Privacy and permissions</h3>
+              <p>TabYT has no servers, no analytics and no accounts. It requests access only to YouTube pages, plus local storage, alarms, notifications and scripting. It does not read other sites, cookies or browsing history. Incognito tabs are ignored and never saved. All settings and history live in your browser's local extension storage.</p>
+              <p class="muted">Removing the extension also removes its local storage. Export your data first if you want a backup.</p>
+            </article>
+            <article class="card card-pad">
+              <h3 class="help-heading">Troubleshooting</h3>
+              <ul class="help-list">
+                <li>If a tab shows a stale reading, click Refresh. TabYT re-injects its content script if the page was open before installation or after an update.</li>
+                <li>If auto-close does not run, check the threshold, protections and that the tab is actually in the background.</li>
+                <li>If a resume starts from the beginning, the video may not have had a saved position, or YouTube changed its player markup. Reload the video and try again.</li>
+                <li>If measured readings are unavailable, your browser does not expose per-tab memory; estimates are working as intended.</li>
+              </ul>
+            </article>
+            <article class="card card-pad">
+              <h3 class="help-heading">Install &amp; update</h3>
+              <p>Chrome: open <span class="mono">chrome://extensions</span>, enable Developer mode and load the unpacked <span class="mono">dist/chrome</span> folder. Firefox: open <span class="mono">about:debugging</span>, choose “Load Temporary Add-on” and select <span class="mono">dist/firefox/manifest.json</span>.</p>
+              <p class="muted">Store installs update automatically. If you loaded the extension unpacked, run <span class="mono">npm run build</span> and reload it to update. TabYT reconnects open YouTube tabs on the next refresh.</p>
+            </article>
+          </div>
+
+          <p class="help-footer" id="help-version">TabYT v1.0.18 · Local-only YouTube tab memory manager</p>
+        </section>
+      </main>
+
+      <footer class="page-foot">
+        <span><span data-icon="lock"></span> TabYT is local-only. No accounts, no analytics, no network requests.</span>
+        <span id="footer-version">v1.0.18</span>
+      </footer>
+    </div>
+  </div>
+
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title">
+    <div class="dialog-body">
+      <h2 class="dialog-title" data-dialog-title id="confirm-title">Are you sure?</h2>
+      <p class="dialog-message" data-dialog-message></p>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn" type="button" data-dialog-cancel>Cancel</button>
+      <button class="btn btn-primary" type="button" data-dialog-confirm>Continue</button>
+    </div>
+  </dialog>
+
+  <script src="../lib/core.js"></script>
+  <script src="common.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>

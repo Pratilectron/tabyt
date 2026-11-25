@@ -1,0 +1,69 @@
+{
+  "manifest_version": 3,
+  "name": "TabYT — YouTube Tab Memory Manager",
+  "short_name": "TabYT",
+  "version": "1.0.23",
+  "description": "See YouTube tab memory, save playback positions, close tabs in one click, auto-close idle videos, and keep a local memory history.",
+  "minimum_chrome_version": "121",
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications",
+    "scripting",
+    "browsingData"
+  ],
+  "host_permissions": [
+    "*://www.youtube.com/*",
+    "*://m.youtube.com/*",
+    "*://music.youtube.com/*",
+    "*://youtube.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "TabYT — YouTube tab memory",
+    "default_popup": "ui/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_ui": {
+    "page": "ui/dashboard.html#settings",
+    "open_in_tab": true
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://www.youtube.com/*",
+        "*://m.youtube.com/*",
+        "*://music.youtube.com/*",
+        "*://youtube.com/*"
+      ],
+      "js": [
+        "lib/core.js",
+        "content.js",
+        "vendor/video-ambient-glow.js",
+        "player.js",
+        "layout.js"
+      ],
+      "css": [
+        "layout.css"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
