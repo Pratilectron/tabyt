@@ -439,6 +439,17 @@ html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
   box-sizing: border-box !important;
 }
 
+/* Layout variant: the rail is the left section of the page, the player moves right. */
+html.tabyt-layout-on ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #secondary {
+  order: -1;
+}
+html.tabyt-layout-on ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #primary {
+  order: 0;
+}
+html.tabyt-layout-on ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #tabyt-divider {
+  order: 0;
+}
+
 html.tabyt-layout-on ytd-watch-flexy #secondary-inner {
   display: flex !important;
   flex: 1 1 auto !important;
