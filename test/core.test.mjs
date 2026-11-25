@@ -392,7 +392,8 @@ test("injection survives video replacement and avoids duplicates", () => {
 test("description more button works in the copied info panel", () => {
   const layout = readFileSync(join(root, "src", "layout.js"), "utf8");
   assert.match(layout, /function stripDeadToggles\(root\)/);
-  assert.match(layout, /function addDescriptionToggle\(info, body, descNode\)/);
+  assert.match(layout, /function addDescriptionToggle\(info, body, descNode, titleText\)/);
+  assert.match(layout, /classList\.remove\("tabyt-entering"\)/);
   assert.match(layout, /toggle\.addEventListener\("click"/);
   assert.match(layout, /info\.__descExpanded = !info\.__descExpanded/);
   assert.match(layout, /body\.classList\.toggle\("tabyt-desc-expanded", expanded\)/);

@@ -722,6 +722,25 @@ html.tabyt-layout-on.tabyt-rail-info ytd-watch-flexy #primary #description-inlin
   display: none !important;
 }
 
+/* Info body: the description is the left column; the title + stats sit on the right. */
+html.tabyt-layout-on #tabyt-rail .tabyt-info-body {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc-column {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-side {
+  flex: 0 0 190px;
+  max-width: 28%;
+  padding-left: 14px;
+  border-left: 1px solid var(--tabyt-line);
+}
+
 html.tabyt-layout-on #tabyt-rail .tabyt-info-title {
   margin: 0 0 12px;
   color: var(--tabyt-text);

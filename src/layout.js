@@ -869,11 +869,27 @@
     });
   }
 
-  function addDescriptionToggle(info, body, descNode) {
+  function addDescriptionToggle(info, body, descNode, titleText) {
     const content = document.createElement("div");
     content.className = "tabyt-desc-content";
     const source = descriptionContent(descNode);
     let clone = source ? source.cloneNode(true) : null;
+    if (clone) {
+      /*
+       * The Info panel keeps the title and stats in their own side column, so
+       * drop them from the description copy too (the longest-ancestor source
+       * can include the owner/views line).
+       */
+      if (titleText) {
+        const title = titleText.replace(/\s+/g, " ").trim().slice(0, 120);
+        clone.querySelectorAll("*").forEach((el) => {
+          const text = nodeText(el);
+          if (text && title && text.indexOf(title) !== -1 && text.length <= title.length + 40) {
+            el.remove();
+          }
+        });
+      }
+    }
     if (clone) {
       clone.removeAttribute("id");
       clone.querySelectorAll("[id]").forEach((child) => child.removeAttribute("id"));
@@ -939,29 +955,39 @@
     info.__infoKey = key;
     info.textContent = "";
 
+    // The title and stats sit in their own column on the right of the description.
+    const infoBody = document.createElement("div");
+    infoBody.className = "tabyt-info-body";
+    const descColumn = document.createElement("div");
+    descColumn.className = "tabyt-info-desc-column";
+    const descBody = document.createElement("div");
+    descBody.className = "tabyt-info-desc";
+    if (descNode) {
+      addDescriptionToggle(info, descBody, descNode, titleText);
+    }
+    descColumn.appendChild(descBody);
+    infoBody.appendChild(descColumn);
+    const side = document.createElement("div");
+    side.className = "tabyt-info-side";
     if (titleText) {
       const heading = document.createElement("h1");
       heading.className = "tabyt-info-title";
       heading.textContent = titleText;
-      info.appendChild(heading);
+      side.appendChild(heading);
     }
     if (metaText) {
       const meta = document.createElement("p");
       meta.className = "tabyt-info-meta";
       meta.textContent = metaText;
-      info.appendChild(meta);
+      side.appendChild(meta);
     }
-    if (descNode) {
-      const body = document.createElement("div");
-      body.className = "tabyt-info-desc";
-      addDescriptionToggle(info, body, descNode);
-      info.appendChild(body);
-    }
+    infoBody.appendChild(side);
+    info.appendChild(infoBody);
     if (!titleText && !descNode) {
       const note = document.createElement("p");
       note.className = "tabyt-empty";
       note.textContent = "Title and description appear here when YouTube finishes loading this video.";
-      info.appendChild(note);
+      infoBody.appendChild(note);
     }
   }
 
