@@ -794,47 +794,11 @@ html.tabyt-layout-on #tabyt-rail .tabyt-desc-text {
   max-width: 100%;
 }
 
-/* Our own description expander: the cloned YouTube toggle has no listeners. */
+/* Our own description copy — expanded by default, no "more" toggle. */
 html.tabyt-layout-on #tabyt-rail .tabyt-desc-content {
   position: relative;
-  max-height: 4.8em;
-  overflow: hidden;
-}
-
-html.tabyt-layout-on #tabyt-rail .tabyt-desc-content::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 1.6em;
-  pointer-events: none;
-  background: linear-gradient(to bottom, transparent, var(--tabyt-bg));
-}
-
-html.tabyt-layout-on #tabyt-rail .tabyt-desc-expanded .tabyt-desc-content {
   max-height: none;
-}
-
-html.tabyt-layout-on #tabyt-rail .tabyt-desc-expanded .tabyt-desc-content::after {
-  display: none;
-}
-
-html.tabyt-layout-on #tabyt-rail .tabyt-desc-toggle {
-  appearance: none;
-  margin: 6px 0 0;
-  padding: 2px 0;
-  border: 0;
-  background: transparent;
-  color: var(--tabyt-text);
-  font: 600 13px/1.4 "Roboto", "Arial", sans-serif;
-  cursor: pointer;
-}
-
-html.tabyt-layout-on #tabyt-rail .tabyt-desc-toggle:hover,
-html.tabyt-layout-on #tabyt-rail .tabyt-desc-toggle:focus-visible {
-  color: var(--tabyt-cta);
-  outline: none;
+  overflow: hidden;
 }
 
 /* Chapters appended from the native description, so the copy shows the same data. */

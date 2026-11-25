@@ -394,10 +394,9 @@ test("description more button works in the copied info panel", () => {
   assert.match(layout, /function stripDeadToggles\(root\)/);
   assert.match(layout, /function addDescriptionToggle\(info, body, descNode, titleText\)/);
   assert.match(layout, /classList\.remove\("tabyt-entering"\)/);
-  assert.match(layout, /toggle\.addEventListener\("click"/);
-  assert.match(layout, /info\.__descExpanded = !info\.__descExpanded/);
-  assert.match(layout, /body\.classList\.toggle\("tabyt-desc-expanded", expanded\)/);
-  assert.match(layout, /toggle\.textContent = expanded \? "Show less" : "…more"/);
+  /* The description is expanded by default — no "more" toggle needed. */
+  assert.match(layout, /body\.append\(content\);\s*body\.classList\.add\("tabyt-desc-expanded"\)/);
+  assert.match(layout, /info\.__descExpanded = true/);
   assert.match(layout, /info\.__infoVideoKey !== titleText/);
   assert.match(layout, /clone\.tagName === "YTD-TEXT-INLINE-EXPANDER"/);
   assert.match(layout, /function deepFind\(root, selector\)/);
@@ -413,9 +412,7 @@ test("description more button works in the copied info panel", () => {
   assert.match(layout, /tabyt-info-meta/);
 
   const css = readFileSync(join(root, "src", "layout.css"), "utf8");
-  assert.match(css, /\.tabyt-desc-content\s*\{[^}]*max-height:[^}]*overflow:\s*hidden/s);
-  assert.match(css, /\.tabyt-desc-expanded \.tabyt-desc-content\s*\{[^}]*max-height:\s*none/s);
-  assert.match(css, /\.tabyt-desc-toggle\s*\{[^}]*cursor:\s*pointer/s);
+  assert.match(css, /\.tabyt-desc-content\s*\{[^}]*max-height: none/s);
   assert.match(css, /\.tabyt-info-meta\s*\{/);
 });
 

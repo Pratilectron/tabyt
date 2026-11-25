@@ -912,25 +912,10 @@
       content.appendChild(clone);
     }
 
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "tabyt-desc-toggle";
-
-    const apply = () => {
-      const expanded = Boolean(info.__descExpanded);
-      body.classList.toggle("tabyt-desc-expanded", expanded);
-      toggle.textContent = expanded ? "Show less" : "…more";
-      toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
-    };
-    toggle.addEventListener("click", (event) => {
-      event.stopPropagation();
-      info.__descExpanded = !info.__descExpanded;
-      apply();
-    });
-
-    body.append(content, toggle);
+    // The description is expanded by default — no "show more" toggle.
+    body.append(content);
+    body.classList.add("tabyt-desc-expanded");
     appendChapters(content, descNode);
-    apply();
   }
 
   /*
@@ -946,11 +931,10 @@
     const key = titleText + "::" + descText.length + ":" + descText.slice(0, 120) + "::" + metaText;
     if (info.__infoKey === key && info.querySelector(".tabyt-info-title, .tabyt-info-desc, .tabyt-empty")) return;
 
-    // A new video gets a fresh collapsed state; expanding our copy must not be
-    // undone by an incidental rebuild of the same description.
+    // A new video starts with the description expanded.
     if (info.__infoVideoKey !== titleText) {
       info.__infoVideoKey = titleText;
-      info.__descExpanded = false;
+      info.__descExpanded = true;
     }
     info.__infoKey = key;
     info.textContent = "";
