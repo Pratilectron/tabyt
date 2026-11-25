@@ -1,5 +1,18 @@
 # TabYT
 
+```
+  .================================================.
+ /  ▄▄▄   ▄▄▄  ▄▄▄▄▄▄▄▄   ▄▄▄▄▄▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄  \
+ |  ██▀██ ██▀██  ▀██      ██          ██       ██ |
+ |  ██  ██████    ██      ██   ▄▄▄▄   ██   ▄▄▄▄█▀ |
+ |  ██  ▀██▀██    ██      ██  ██▀██▀██  ██ ██▀▀▀  |
+ |  ██   ██  ██   ██      ██  ▀██      ██  ▀▀▀▀██  |
+ |  ▀▀   ▀▀  ▀▀   ▀▀      ▀▀          ▀▀      ▀▀  |
+ \      ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄  /
+  '------------------------------------------------'
+              ▶ YouTube Tab Memory Manager
+```
+
 **A local-only YouTube tab memory manager for Chrome and Firefox.**
 
 TabYT shows how much memory your open YouTube tabs are using, lets you close one tab or all of them in a click, saves the video title and playback position before closing, and brings you back to exactly where you stopped.
