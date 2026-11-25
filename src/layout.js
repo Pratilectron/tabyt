@@ -966,7 +966,6 @@
       addDescriptionToggle(info, descBody, descNode, titleText);
     }
     descColumn.appendChild(descBody);
-    infoBody.appendChild(descColumn);
     const side = document.createElement("div");
     side.className = "tabyt-info-side";
     if (titleText) {
@@ -981,7 +980,9 @@
       meta.textContent = metaText;
       side.appendChild(meta);
     }
+    // The title + stats sit on the left of the description.
     infoBody.appendChild(side);
+    infoBody.appendChild(descColumn);
     info.appendChild(infoBody);
     if (!titleText && !descNode) {
       const note = document.createElement("p");
