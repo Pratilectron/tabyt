@@ -1,6 +1,6 @@
 {
   "name": "tabyt",
-  "version": "1.0.23",
+  "version": "1.0.56",
   "private": true,
   "description": "TabYT — a local-only YouTube tab memory manager for Chrome and Firefox.",
   "license": "MIT",
@@ -13,8 +13,5 @@
   },
   "engines": {
     "node": ">=20"
-  },
-  "dependencies": {
-    "video-ambient-glow": "^1.2.6"
   }
 }

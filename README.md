@@ -10,106 +10,157 @@
  |  ▀▀   ▀▀  ▀▀   ▀▀      ▀▀          ▀▀      ▀▀  |
  \      ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄  /
   '------------------------------------------------'
-              ▶ YouTube Tab Memory Manager
+        ▶ The YouTube extension worth keeping
 ```
 
-**A local-only YouTube tab memory manager for Chrome and Firefox.**
+**The local YouTube extension for people who keep too many videos open.**
 
-TabYT shows how much memory your open YouTube tabs are using, lets you close one tab or all of them in a click, saves the video title and playback position before closing, and brings you back to exactly where you stopped.
+TabYT watches the memory those tabs cost, closes them without losing your place, and rebuilds the watch page around the player: description, comments, live chat and related videos stay in one rail. No account. No analytics. Nothing leaves your browser except the two lookups you can turn off.
 
-Everything stays on your device. TabYT has no servers, no analytics, no accounts and makes no network requests.
-
-[![tests](https://img.shields.io/badge/tests-29%20passing-blue?style=flat-square&logo=node.js)](test/core.test.mjs)
-[![version](https://img.shields.io/badge/v1.0.23-blue?style=flat-square&logo=github-actions)](https://github.com/Pratilectron/tabyt/commits/main)
+[![tests](https://img.shields.io/badge/tests-33%20passing-blue?style=flat-square&logo=node.js)](test/core.test.mjs)
+[![version](https://img.shields.io/badge/v1.0.56-blue?style=flat-square&logo=github-actions)](https://github.com/Pratilectron/tabyt/commits/main)
 [![license](https://img.shields.io/github/license/Pratilectron/tabyt?style=flat-square&logo=mit&label=License)](LICENSE)
 [![mv3](https://img.shields.io/badge/manifest-v3-blue?style=flat-square&logo=github)](manifests/chrome.json)
+[![chrome](https://img.shields.io/badge/Chrome-121%2B-blue?style=flat-square&logo=googlechrome)](manifests/chrome.json)
+[![firefox](https://img.shields.io/badge/Firefox-142%2B-orange?style=flat-square&logo=firefoxbrowser)](manifests/firefox.json)
+
+---
+
+## Why TabYT
+
+Most YouTube extensions add a button and a network call. TabYT does two jobs properly.
+
+1. **It keeps a pile of YouTube tabs from eating the machine.** Every open video is ranked, you can close one or all of them, and the title plus the exact timestamp come back when you resume.
+2. **It makes the watch page usable.** The player stays on the left. Title, views, channel and likes stay under it. Description, comments, live chat and recommendations live in a rail you can resize, and that width is remembered.
+
+Chrome 121+, Firefox 142+, Brave, Edge. Manifest V3. Plain JavaScript. MIT.
 
 ---
 
 ## Features
 
-- **Per-tab memory readings** — every open YouTube tab is ranked by an estimated memory footprint, with the active tab, playing videos and sleeping tabs called out.
-- **One-click cleanup** — close a single tab or use **Save & close all**.
-- **Save and resume** — closing through TabYT stores the video title, channel, thumbnail and playback timestamp. Resume opens the video at the saved position, or switches to an already-open tab and seeks it.
-- **Inactive tab cleanup** — optionally close background YouTube tabs after 5 minutes to 24 hours of inactivity. Pinned, audible and playing tabs can be protected.
-- **Memory limits** — set a combined limit (default 1.5 GB), get a notification when you cross it, and optionally let TabYT close the least recently used eligible tabs.
-- **Local memory history** — sampling every 5–60 minutes, kept for 1–30 days, with a chart, peak/average readings and a "biggest offenders" ranking.
-- **Full dashboard** — overview, tabs, saved videos, history, settings and help, plus a compact popup for quick actions.
-- **Watch-page layout** — a fixed two-column shell for YouTube videos: title, description, comments and related videos move into a right rail with its own scrollbars, while the player keeps the whole column visible. Switching tabs or opening a related video never reloads the page.
-- **Custom player controls** — TabYT's own control bar replaces YouTube's, with a seek bar, playback rate cycling and tooltips.
-- **Export and delete** — download a JSON copy of your data or remove everything at any time.
+### Memory
 
----
+- **A reading for every YouTube tab.** Tabs are ranked by an estimated footprint. Playing, active and sleeping videos are called out. The number is an estimate, labeled as one, unless Chrome's Processes API is available.
+- **Close one, or close the pile.** Save & close stores the video before it goes. Save & close all does the same for every eligible tab.
+- **Resume on the same frame.** Saved entries keep the title, channel, thumbnail and playback position. Resume opens that timestamp, or seeks a tab that is already open.
+- **Inactivity cleanup.** Optionally close background YouTube tabs after 5 minutes to 24 hours. Pinned, audible and playing tabs can be left alone. The tab you are looking at is never closed.
+- **A memory ceiling.** Set a combined limit (default 1.5 GB). TabYT can notify you, or close the least recently used eligible tabs.
+- **History on this device.** Samples every 5–60 minutes, kept for 1–30 days, with a chart, peak, average and the tabs that cost the most.
+- **A dashboard and a popup.** Overview, open tabs, saved videos, history, settings and help. The toolbar popup is the short version.
+- **Your data, in a file.** Export a JSON copy, or delete everything TabYT stored.
 
-## Screenshots
+### Watch page
 
-The watch page becomes a two-column layout — the left column is the player and the right rail carries the Info, Comments, Other videos and Related tabs.
+- **Player on the left, everything else on the right.** The page itself does not scroll. Each column does.
+- **The video stays the hero.** Title, channel, views and likes sit under the player. The player is rounded, with a soft glow, and it fits the column without adding a scrollbar.
+- **Info is the full description.** Chapters are clickable and carry their thumbnail. Sponsor, intro and other skip ranges are marked on the seek bar and listed in Info. Nothing is skipped for you.
+- **Comments are a real tab.** The composer stays at the top. Under it: the count, Sort by, then the threads. Each author shows their name, a subscriber pill, and a video count after a pipe.
+- **One discussion tab.** In settings, choose whether that tab lists comments or live chat. The label follows the choice.
+- **Other videos and Related** stay in their own tabs.
+- **The divider is yours.** Drag the split, and TabYT remembers the width. Turn remembering off to return to the default. Corner radius and page motion are settings too, and you can pick which tab opens first.
+- **Ambient light from the picture.** A small blurred copy of the current frame sits behind the page. Text and images stay sharp. It pauses while the tab is hidden or the video is paused.
+- **TabYT's control bar.** Seek, play and playback rate, in place of YouTube's bar, until you switch it off.
+
+### What it refuses to be
+
+No auto-skip. No second video element for the glow. No runtime CDN. No account. SponsorBlock's data is queried; its code is not copied.
 
 ---
 
 ## Install
 
-No build tools are required to use a release build. The unpacked builds are produced by `npm run build`.
-
 ### Chrome, Edge, Brave and other Chromium browsers
 
-1. Run `npm run build` (or unzip a release package). This writes `manifest.json` in the project folder and the icons the manifest points at.
+1. Run `npm run build`. That writes `manifest.json` in the project folder.
 2. Open `chrome://extensions`.
 3. Turn on **Developer mode**.
-4. Click **Load unpacked** and select this project folder (`tabyt`, the folder that contains `manifest.json`). `dist/chrome` is the same extension packaged for a store build.
+4. Click **Load unpacked** and select this folder, the one that contains `manifest.json`. `dist/chrome` is the same extension packed for a store build.
 5. Pin TabYT from the puzzle-piece menu if you want the toolbar badge.
 
-If Chrome reports **Manifest file is missing or unreadable**, the selected folder is not the one that contains `manifest.json`. Select the project folder again, or select `dist/chrome` after a build.
+If the browser says the manifest is missing, the selected folder is not the one that contains `manifest.json`.
 
 ### Firefox
 
-1. Run `npm run build` (or unzip a release package).
+1. Run `npm run build`.
 2. Open `about:debugging#/runtime/this-firefox`.
 3. Click **Load Temporary Add-on…**.
-4. Select `manifest.json` in this project folder, or `dist/firefox/manifest.json` after a build.
+4. Select `manifest.json` in this folder, or `dist/firefox/manifest.json`.
 
-Temporary add-ons in Firefox are removed when the browser restarts. For a permanent install, the build must be signed by Mozilla or loaded in a Firefox version that allows unsigned extensions.
+A temporary add-on is removed when Firefox restarts. A permanent install needs a Mozilla-signed build, or a Firefox build that allows unsigned extensions.
 
-### Updating
+### Updating an unpacked copy
 
-- **Store installs** update automatically when a new version is published.
-- **Unpacked installs**: run `npm run build` (or `npm run package`), then click **Reload** on `chrome://extensions`, or load the add-on again in Firefox. Saved videos and settings remain in extension storage.
-- TabYT reconnects to YouTube tabs that were already open when the extension was installed or updated. If a reading looks stale, click **Refresh**.
+Run `npm run build`, then **Reload** on `chrome://extensions`, or load the add-on again in Firefox. Saved videos and settings stay. Refresh open YouTube tabs so the content script reconnects.
 
 ---
 
 ## Use
 
-1. Open one or more YouTube videos.
-2. Click the TabYT toolbar icon to see the memory overview and the open tabs.
-3. Use **Save & close** on a row, or **Save & close all** to tidy up.
-4. Open **Saved** and press **Resume** to return to a video at its saved timestamp.
-5. Open the dashboard for history, limits and automatic cleanup.
+1. Open a few YouTube videos.
+2. Click the TabYT icon for the memory overview and the open tabs.
+3. **Save & close** a row, or **Save & close all**.
+4. Open **Saved** and press **Resume**.
+5. On a watch page, use the rail. Drag the divider if you want a different split. The choice is in Settings if you want it kept.
 
-The popup refreshes while it is open. The dashboard refreshes every 30 seconds when visible.
+The popup refreshes while it is open. The dashboard refreshes every 30 seconds while it is visible.
 
 ---
 
+## Privacy
+
+TabYT is local. It has no servers, no analytics and no accounts.
+
+- It reads YouTube tab titles, URLs and player state. It does not read other sites, cookies, passwords or browsing history.
+- Settings, saved videos and memory samples live in `storage.local`. Short-lived tab and resume state uses `storage.session` where the browser has it.
+- Incognito tabs are ignored and never saved.
+- **Skip segments** send a 4-character prefix of the SHA-256 of the video id to `sponsor.ajay.app`. The full id is not sent. Turn the setting off and the request stops.
+- **Comment author stats** load the public channel page on `https://www.youtube.com/` for handles in the comments you are reading, without cookies, and cache the name, subscriber count and video count for that page. The request is how the pill and the video count are filled in.
+- **Export my data** downloads a JSON file on this machine. **Delete all local data** wipes what TabYT stored. Removing the extension removes its storage too.
+
+## Permissions
+
+| Permission | Why |
+| --- | --- |
+| `storage` | Settings, saved videos, history and session state, on this device. |
+| `alarms` | The once-a-minute cleanup and history sample. |
+| `notifications` | Memory and auto-close alerts. |
+| `scripting` | Reconnect to YouTube tabs that were already open. |
+| YouTube host access (`www`, `m`, `music`, and the bare domain) | Player state, tab titles, and public channel pages for comment stats. |
+| `https://sponsor.ajay.app/*` | Crowdsourced skip ranges, by hash prefix. |
+| `processes` (Chrome, optional) | Measured renderer memory where Chrome exposes it. |
+
+## How memory is measured
+
+Stable browsers do not give extensions an exact per-tab memory figure. TabYT's reading is an **estimate** from the resolution, whether the video is playing, live and Shorts status, buffered media, DOM size and, where available, the JavaScript heap.
+
+It is a guide for spotting heavy tabs, not a replacement for the browser's task manager. On Chrome builds that expose the `processes` API (typically Dev or Canary), Settings → Readings can use measured renderer memory. Firefox stays on estimates.
+
+## Compatibility
+
+- Chrome 121+ (Manifest V3 service worker)
+- Firefox 142+ (Manifest V3 event page)
+- YouTube desktop, `m.youtube.com` and YouTube Music
+- No runtime dependencies
+
 ## Development
 
-Requirements: Node.js 20 or newer.
+Node.js 20 or newer.
 
 ```bash
-npm test        # unit tests for the pure helpers and listener regression
+npm test        # unit tests
 npm run icons   # regenerate PNG icons in src/icons
-npm run build   # icons + dist/chrome + dist/firefox + verification
-npm run package # build plus store-ready ZIPs in dist/
-npm run verify  # validate manifests, files, syntax and build output
+npm run build   # icons, dist/chrome, dist/firefox, verification
+npm run package # build, plus store zips in dist/
+npm run verify  # manifests, files, syntax, hosts, build output
 ```
 
-Useful details:
-
-- `src/` is the extension root after copying; the browser-specific manifest lives in `manifests/` and is written to each build with the `package.json` version.
-- `src/lib/core.js` is a dependency-free UMD module used by the background worker, content script and pages. It has no DOM or browser API access and is covered by tests.
-- `src/background.js` uses a classic script because Firefox MV3 background pages and Chrome service workers load scripts differently.
-- The options page is `src/ui/dashboard.html#settings`; the welcome flow opens `?welcome=1`.
-- Icons are generated programmatically by `scripts/make-icons.mjs` (no image libraries).
-- `npm run package` creates `dist/tabyt-chrome-v<version>.zip` and `dist/tabyt-firefox-v<version>.zip`.
+- `src/` is the extension. Browser manifests live in `manifests/` and are stamped with the `package.json` version at build time.
+- `src/lib/core.js` is a dependency-free UMD module shared by the worker, content scripts and pages. It has no DOM and no browser APIs.
+- `src/background.js` is a classic script so Firefox's event page and Chrome's service worker can both load it.
+- Settings open at `src/ui/dashboard.html#settings`. The welcome flow uses `?welcome=1`.
+- Icons are drawn by `scripts/make-icons.mjs`. No image libraries.
+- `npm run package` writes `dist/tabyt-chrome-v<version>.zip` and `dist/tabyt-firefox-v<version>.zip`.
 
 ### Project layout
 
@@ -118,67 +169,28 @@ manifests/          chrome.json, firefox.json
 scripts/            make-icons.mjs, build.mjs, verify.mjs
 src/
   background.js     service worker / event page
-  content.js        YouTube player state and resume seeking
+  content.js        player state and resume seeking
   lib/core.js       pure shared helpers
   icons/            generated PNG icons
-  ui/               popup, dashboard and shared styles/scripts
-  layout.js         watch-page layout: tabs rail, related list, custom player controls
+  ui/               popup, dashboard, shared styles
+  authors.js        comment names, subscriber pills, video counts
+  layout.js         watch-page layout, rail, player fit, glow
   layout.css        watch-page styles
-  player.js         native player adapter (play, seek, volume, queue watch events)
-  vendor/video-ambient-glow.js  bundled ambient canvas library
-test/               Node test files
-dist/               generated builds and packages (git-ignored)
+  page-data.js      MAIN-world description and chapters
+  player.js         play, seek, volume, player events
+  sponsor.js        SponsorBlock hash-prefix lookup
+test/               node tests
+dist/               generated builds (git-ignored)
 ```
-
----
-
-## Privacy
-
-- TabYT reads only YouTube tab titles, URLs and player state; it does not read other sites, cookies, passwords or browsing history.
-- Settings, saved videos and memory samples are stored in the browser's local extension storage (`storage.local`). Short-lived tab and resume state uses `storage.session` where available.
-- Incognito tabs are ignored and never saved.
-- No analytics, telemetry, remote logging or network requests are made by the extension.
-- **Export my data** downloads a JSON file locally. **Delete all local data** removes everything TabYT stored.
-- Removing the extension also removes its local storage.
-
-## Permissions
-
-| Permission | Why it is needed |
-| --- | --- |
-| `storage` | Save settings, saved videos, history and session state locally. |
-| `alarms` | Run the once-per-minute cleanup and sampling check. |
-| `notifications` | Memory and auto-close alerts. |
-| `scripting` | Reconnect to YouTube tabs that were open before installation or after an update. |
-| YouTube host access (`www`, `m`, `music`, bare domain) | Read player state and tab titles on YouTube only. |
-| `processes` (Chrome, optional) | Use measured renderer memory where Chrome exposes the Processes API. |
-
-TabYT requests no access to other websites.
-
-## How memory is measured
-
-Browsers do not expose exact per-tab memory to extensions on stable channels. TabYT's reading is an **estimate** built from signals available in the page:
-
-- video resolution and whether it is playing;
-- live-stream and Shorts status;
-- buffered media;
-- DOM node count and, where available, the JavaScript heap.
-
-The result is rounded and meant as a relative guide for spotting heavy tabs, not a replacement for the browser Task Manager. On Chrome builds that expose the `processes` API (typically Dev/Canary), you can enable **measured renderer memory** in Settings → Readings. Firefox uses estimates because it does not provide per-tab memory to extensions.
-
-## Compatibility
-
-- Chrome 121+ (Manifest V3 service worker)
-- Firefox 142+ (Manifest V3 event page)
-- YouTube desktop, mobile web (`m.youtube.com`) and YouTube Music pages
-- No build-time or runtime dependencies; plain JavaScript, HTML and CSS
 
 ## Troubleshooting
 
-- **The popup says the background worker is not responding.** Reload the extension on `chrome://extensions` or in `about:debugging`, then try again. After an update, open YouTube tabs may need a refresh so the content script reconnects.
-- **Auto-close is not running.** Confirm it is enabled, the tab is a background tab, the inactivity threshold has passed, and the tab is not protected as pinned, audible or playing. The current tab in a focused window is never auto-closed.
-- **A resume starts at the beginning.** YouTube may not have had a readable player yet when the tab opened. Reload the video; TabYT's content script will apply the pending position once metadata is available. Videos with no saved position (or watched to the end) intentionally start from the beginning.
-- **Measured readings are unavailable.** That is expected on stable Chrome and Firefox. Estimates remain active.
-- **Saved videos disappeared.** Check the maximum saved videos setting; the oldest entries are removed when it is reached. Removing the extension also clears its storage.
+- **The popup says the background worker is not responding.** Reload the extension, then try again. After an update, refresh open YouTube tabs.
+- **Auto-close is not running.** It has to be enabled, the tab has to be in the background, the timer has to have elapsed, and the tab must not be pinned, audible or playing. The focused tab is never closed.
+- **Resume starts at the beginning.** The player may not have been readable yet. Reload the video. TabYT applies a pending position once metadata exists. A video with no saved position, or one watched to the end, starts at the beginning on purpose.
+- **Measured readings are unavailable.** Expected on stable Chrome and on Firefox. Estimates stay on.
+- **Saved videos disappeared.** The saved-video cap drops the oldest entries. Removing the extension clears its storage.
+- **Comment pills are empty.** The channel page did not include a public count, or the request has not finished. Scroll the comments and give it a moment. Counts are cached per channel for that page.
 
 ---
 

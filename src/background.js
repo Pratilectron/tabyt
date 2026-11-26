@@ -19,7 +19,7 @@ const SAVED_KEY = "tabyt:saved";
 const STATS_KEY = "tabyt:stats";
 const AUTO_CLOSE_ALARM = "tabyt-autoclose";
 
-const VERSION = "1.0.23";
+const VERSION = "1.0.56";
 const HISTORY_MAX_SAMPLES = 1500;
 const RESUME_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -56,8 +56,15 @@ const DEFAULT_SETTINGS = Object.freeze({
   layoutRelated: true,
   layoutChat: true,
   layoutLive: true,
+  layoutDiscussion: "comments",
   layoutAmbient: true,
+  layoutSkips: true,
   playerResize: false,
+  rememberLayoutSize: true,
+  layoutSide: 420,
+  layoutRadius: 16,
+  layoutMotion: true,
+  layoutStartTab: "info",
   customControls: true
 });
 
@@ -87,8 +94,15 @@ const SETTING_SPECS = {
   layoutRelated: "boolean",
   layoutChat: "boolean",
   layoutLive: "boolean",
+  layoutDiscussion: ["comments", "live"],
   layoutAmbient: "boolean",
+  layoutSkips: "boolean",
   playerResize: "boolean",
+  rememberLayoutSize: "boolean",
+  layoutSide: [280, 680],
+  layoutRadius: [0, 28],
+  layoutMotion: "boolean",
+  layoutStartTab: ["info", "comments", "other", "related", "live"],
   customControls: "boolean"
 };
 
@@ -231,14 +245,14 @@ function applySettings(current, patch) {
       const value = patch[key];
       if (spec === "boolean") {
         next[key] = value === true || value === "true" || value === 1 || value === "1";
-      } else if (Array.isArray(spec)) {
+      } else if (Array.isArray(spec) && typeof spec[0] === "number") {
         const num = Number(value);
         if (!Number.isFinite(num)) {
           errors.push(`${key} must be a number`);
           continue;
         }
         next[key] = Math.round(clamp(num, spec[0], spec[1]));
-      } else if (spec.indexOf(value) === -1) {
+      } else if (!Array.isArray(spec) || spec.indexOf(value) === -1) {
         errors.push(`${key} has an unsupported value`);
       } else {
         next[key] = value;

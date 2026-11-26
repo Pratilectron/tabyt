@@ -42,7 +42,8 @@ const ALLOWED_HOSTS = new Set([
   "*://www.youtube.com/*",
   "*://m.youtube.com/*",
   "*://music.youtube.com/*",
-  "*://youtube.com/*"
+  "*://youtube.com/*",
+  "https://sponsor.ajay.app/*"
 ]);
 
 function verifyManifest(dir, browser) {
@@ -164,8 +165,24 @@ for (const file of jsFiles) {
   const text = readFileSync(file, "utf8");
   if (/\beval\s*\(/.test(text)) fail(`${relative(root, file)} uses eval()`);
   if (/new\s+Function\s*\(/.test(text)) fail(`${relative(root, file)} uses new Function()`);
-  if (/\bfetch\s*\(/.test(text) || /XMLHttpRequest/.test(text)) {
-    fail(`${relative(root, file)} performs a network request`);
+  const rel = relative(root, file).replace(/\\/g, "/");
+  const sponsorFile = rel === "src/sponsor.js";
+  const authorsFile = rel === "src/authors.js";
+  const fetches = /\bfetch\s*\(/.test(text);
+  if (/XMLHttpRequest/.test(text) || (fetches && !sponsorFile && !authorsFile)) {
+    fail(`${rel} performs a network request`);
+  }
+  if (sponsorFile) {
+    const urls = text.match(/https?:\/\/[^"'`\s)]+/g) || [];
+    if (!urls.length || urls.some((url) => !url.startsWith("https://sponsor.ajay.app/"))) {
+      fail("src/sponsor.js may only request https://sponsor.ajay.app/");
+    }
+  }
+  if (authorsFile) {
+    const urls = text.match(/https?:\/\/[^"'`\s)]+/g) || [];
+    if (!urls.length || urls.some((url) => !url.startsWith("https://www.youtube.com/"))) {
+      fail("src/authors.js may only request https://www.youtube.com/");
+    }
   }
 }
 

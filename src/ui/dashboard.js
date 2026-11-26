@@ -48,7 +48,9 @@
     "notifyCooldownMinutes",
     "historySampleMinutes",
     "historyRetentionDays",
-    "maxSavedVideos"
+    "maxSavedVideos",
+    "layoutSide",
+    "layoutRadius"
   ]);
 
   const state = {
@@ -933,9 +935,16 @@
       const key = input.dataset.setting;
       if (!Object.prototype.hasOwnProperty.call(settings, key)) return;
       if (input.type === "checkbox") input.checked = !!settings[key];
+      else if (input.type === "radio") input.checked = input.value === String(settings[key]);
       else input.value = String(settings[key]);
+      if (key === "layoutSide" && input.type === "range") input.disabled = settings.rememberLayoutSize === false;
+      if (key === "layoutDiscussion" && input.type === "radio") input.disabled = settings.layoutComments === false;
     });
     state.applyingSettings = false;
+    const sideReadout = document.getElementById("layout-side-readout");
+    if (sideReadout) sideReadout.textContent = Math.round(Number(settings.layoutSide) || 420) + " px";
+    const radiusReadout = document.getElementById("layout-radius-readout");
+    if (radiusReadout) radiusReadout.textContent = Math.round(Number(settings.layoutRadius) || 0) + " px";
   }
 
   function updateLimitBadge() {
@@ -1438,6 +1447,12 @@
     });
 
     $$("[data-setting]").forEach((input) => {
+      if (input.type === "range") {
+        input.addEventListener("input", () => {
+          const readout = document.getElementById(input.id === "setting-layoutSide" ? "layout-side-readout" : "layout-radius-readout");
+          if (readout) readout.textContent = input.value + " px";
+        });
+      }
       input.addEventListener("change", () => {
         if (state.applyingSettings) return;
         const key = input.dataset.setting;

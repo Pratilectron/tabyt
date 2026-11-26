@@ -294,6 +294,13 @@
                       <span>Applies on any YouTube watch or live page, including when you move between videos. The player fits the column, and both columns scroll independently instead of the document.</span>
                     </span>
                   </label>
+                  <label class="field-label" for="setting-layoutStartTab">Open this tab first</label>
+                  <select class="select" id="setting-layoutStartTab" data-setting="layoutStartTab">
+                    <option value="info">Info</option>
+                    <option value="comments">Comments</option>
+                    <option value="other">Other</option>
+                    <option value="related">Related</option>
+                  </select>
                   <label class="switch">
                     <input type="checkbox" data-setting="layoutInfo">
                     <span class="switch-track"><span class="switch-thumb"></span></span>
@@ -302,14 +309,26 @@
                       <span>Title and description in the right panel.</span>
                     </span>
                   </label>
-                  <label class="switch">
-                    <input type="checkbox" data-setting="layoutComments">
-                    <span class="switch-track"><span class="switch-thumb"></span></span>
-                    <span class="switch-copy">
-                      <strong>Comments</strong>
-                      <span>Comments scroll inside their own tab, without moving the player or the rest of the page.</span>
-                    </span>
-                  </label>
+                  <div class="setting-group">
+                    <label class="switch">
+                      <input type="checkbox" data-setting="layoutComments">
+                      <span class="switch-track"><span class="switch-thumb"></span></span>
+                      <span class="switch-copy">
+                        <strong>Comments</strong>
+                        <span>One tab for the discussion. Pick comments or live chat below. It scrolls on its own, without moving the player.</span>
+                      </span>
+                    </label>
+                    <div class="setting-nested setting-choice" role="radiogroup" aria-label="What the discussion tab lists">
+                      <label class="choice">
+                        <input type="radio" name="layoutDiscussion" value="comments" data-setting="layoutDiscussion">
+                        <span>Comments</span>
+                      </label>
+                      <label class="choice">
+                        <input type="radio" name="layoutDiscussion" value="live" data-setting="layoutDiscussion">
+                        <span>Live chat</span>
+                      </label>
+                    </div>
+                  </div>
                   <label class="switch">
                     <input type="checkbox" data-setting="layoutOther">
                     <span class="switch-track"><span class="switch-thumb"></span></span>
@@ -330,34 +349,54 @@
                     <input type="checkbox" data-setting="layoutAmbient">
                     <span class="switch-track"><span class="switch-thumb"></span></span>
                     <span class="switch-copy">
-                      <strong>Ambient player background</strong>
-                      <span>A blurred glow behind the player, colored from the video that is playing.</span>
+                      <strong>Ambient page background</strong>
+                      <span>A blurred glow from the video, behind the whole page. Text and images stay sharp.</span>
                     </span>
                   </label>
                   <label class="switch">
-                    <input type="checkbox" data-setting="layoutChat">
+                    <input type="checkbox" data-setting="layoutSkips">
                     <span class="switch-track"><span class="switch-thumb"></span></span>
                     <span class="switch-copy">
-                      <strong>Live chat</strong>
-                      <span>YouTube's chat frame appears in the Live tab. Turn off to hide it.</span>
+                      <strong>Skip segments</strong>
+                      <span>Shows the sponsor, intro, and other ranges SponsorBlock would skip, on the seek bar and in the Info tab. A hash prefix of the video id is sent to SponsorBlock.</span>
                     </span>
                   </label>
-                  <label class="switch">
-                    <input type="checkbox" data-setting="layoutLive">
-                    <span class="switch-track"><span class="switch-thumb"></span></span>
-                    <span class="switch-copy">
-                      <strong>Live tab</strong>
-                      <span>Shows live chat as a tab. Comments are hidden on live streams.</span>
-                    </span>
-                  </label>
-                  <label class="switch">
-                    <input type="checkbox" data-setting="playerResize">
-                    <span class="switch-track"><span class="switch-thumb"></span></span>
-                    <span class="switch-copy">
-                      <strong>Player resizing</strong>
-                      <span>Player fills the left column (theater mode). Disable to keep YouTube player at native dimensions.</span>
-                    </span>
-                  </label>
+                  <div class="setting-group">
+                    <label class="switch">
+                      <input type="checkbox" data-setting="playerResize">
+                      <span class="switch-track"><span class="switch-thumb"></span></span>
+                      <span class="switch-copy">
+                        <strong>Player resizing</strong>
+                        <span>Shows the divider between the player and the tabs. Drag it to choose the width.</span>
+                      </span>
+                    </label>
+                    <label class="switch setting-nested">
+                      <input type="checkbox" data-setting="rememberLayoutSize">
+                      <span class="switch-track"><span class="switch-thumb"></span></span>
+                      <span class="switch-copy">
+                        <strong>Remember the divider</strong>
+                        <span>The width you set stays on this browser. Turn off to return to the default split on the next visit.</span>
+                      </span>
+                    </label>
+                    <div class="setting-nested field">
+                      <label class="field-label" for="setting-layoutSide">Divider width <span id="layout-side-readout">420 px</span></label>
+                      <input class="range" id="setting-layoutSide" type="range" min="280" max="680" step="10" data-setting="layoutSide">
+                    </div>
+                  </div>
+                  <div class="setting-group">
+                    <div class="setting-nested field">
+                      <label class="field-label" for="setting-layoutRadius">Player corner <span id="layout-radius-readout">16 px</span></label>
+                      <input class="range" id="setting-layoutRadius" type="range" min="0" max="28" step="1" data-setting="layoutRadius">
+                    </div>
+                    <label class="switch">
+                      <input type="checkbox" data-setting="layoutMotion">
+                      <span class="switch-track"><span class="switch-thumb"></span></span>
+                      <span class="switch-copy">
+                        <strong>Page motion</strong>
+                        <span>The long ease on tabs, the player bar, and the panels. Turn off for instant changes.</span>
+                      </span>
+                    </label>
+                  </div>
                   <label class="switch">
                     <input type="checkbox" data-setting="customControls">
                     <span class="switch-track"><span class="switch-thumb"></span></span>

@@ -1,14 +1,16 @@
 /*
  * TabYT watch layout.
  *
- * Runs on every YouTube page the extension matches. Title, description,
- * comments, sidebar videos, and live chat sit in tabs beside the player.
- * Live streams get a Live tab for chat, and the Comments tab is hidden for them.
- * The watch page is a fixed shell: the left column and the right rail scroll
- * independently, the document itself does not scroll. A divider resizes the
- * rail. Related links delegate to YouTube's own anchors so navigation stays
- * an SPA instead of reloading the page.
- * Ambient color behind the player comes from video-ambient-glow.
+ * Runs on every YouTube page the extension matches. The player column is on
+ * the left and keeps the title, channel, views and likes under the video.
+ * The right rail holds Info (the full description), one discussion tab,
+ * other videos and related videos. That tab lists comments or live chat,
+ * whichever the user picked in settings.
+ * The watch page is a fixed shell: the two columns scroll independently, the
+ * document itself does not scroll. A divider resizes the rail. Related links
+ * delegate to YouTube's own anchors so navigation stays an SPA.
+ * Ambient color behind the player is a small canvas copy of the current
+ * frame, blurred twice on that bitmap. It never reads pixels back in JavaScript.
  */
 (() => {
   if (window.__tabytLayoutLoaded) return;
@@ -23,15 +25,21 @@
     layoutRelated: true,
     layoutChat: true,
     layoutLive: true,
+    layoutDiscussion: "comments",
     layoutAmbient: true,
+    layoutSkips: true,
     // Player resizing is opt-in; off by default so the YouTube player keeps its
     // native dimensions until the user enables it in Settings.
     playerResize: false,
+    rememberLayoutSize: true,
+    layoutSide: 420,
+    layoutRadius: 16,
+    layoutMotion: true,
+    layoutStartTab: "info",
     // TabYT's own control bar replaces YouTube's native chrome by default.
     customControls: true
   };
 
-  const SIDE_KEY = "tabyt-side";
   let glow = null;
   let glowVideo = null;
 
@@ -72,6 +80,7 @@
       return;
     }
     core.applyEarlyClasses(settings);
+    applyGlassTier();
     if (earlyRetryTimer) {
       clearTimeout(earlyRetryTimer);
       earlyRetryTimer = 0;
@@ -80,6 +89,33 @@
       earlyObserver.disconnect();
       earlyObserver = null;
     }
+  }
+
+  /*
+   * backdrop-filter on the sticky comment dock is costly when the ambient
+   * canvas animates behind it. One light blur on the dock is enough; nested
+   * blurs on the composer are avoided in CSS. Lite tier drops blur entirely.
+   */
+  function applyGlassTier() {
+    const root = document.documentElement;
+    if (!root) return;
+    let lite = false;
+    try {
+      if (settings.layoutMotion === false) lite = true;
+      if (window.matchMedia) {
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) lite = true;
+        if (window.matchMedia("(prefers-reduced-transparency: reduce)").matches) lite = true;
+      }
+      const cores = navigator.hardwareConcurrency;
+      if (Number.isFinite(cores) && cores <= 4) lite = true;
+      const mem = navigator.deviceMemory;
+      if (Number.isFinite(mem) && mem <= 4) lite = true;
+      const conn = navigator.connection;
+      if (conn && (conn.saveData || conn.effectiveType === "2g" || conn.effectiveType === "slow-2g")) {
+        lite = true;
+      }
+    } catch (_error) { /* ignore */ }
+    root.classList.toggle("tabyt-glass-lite", lite);
   }
 
   applyEarlyClassesSafe();
@@ -96,15 +132,25 @@
   const styleBackup = new Map();
   const panelScroll = new Map();
   let mainObserver = null;
-  let playerAttrObserver = null;
 
   function readStored(raw) {
+    const normalized = core && core.normalizeSettings ? core.normalizeSettings(raw || {}) : null;
     const next = Object.assign({}, DEFAULTS);
-    if (!raw || typeof raw !== "object") return next;
+    const source = normalized || raw;
+    if (!source || typeof source !== "object") return next;
     Object.keys(DEFAULTS).forEach((key) => {
-      if (typeof raw[key] === "boolean") next[key] = raw[key];
+      if (source[key] !== undefined) next[key] = source[key];
     });
     return next;
+  }
+
+  function preferredTab() {
+    const name = settings.layoutStartTab;
+    if (name === "live") return "comments";
+    if (name === "comments" || name === "other" || name === "related" || name === "info") {
+      return name;
+    }
+    return "info";
   }
 
   function loadSettings() {
@@ -148,6 +194,53 @@
     return (flexy && flexy.getAttribute("video-id")) || "";
   }
 
+  let pageMeta = { videoId: "", description: "", chapters: [] };
+
+  function emptyMeta() {
+    return { videoId: "", description: "", chapters: [] };
+  }
+
+  function sanitizeMeta(raw) {
+    const chapters = [];
+    const seen = new Set();
+    if (raw && Array.isArray(raw.chapters)) {
+      raw.chapters.forEach((chapter) => {
+        const title = chapter && typeof chapter.title === "string"
+          ? chapter.title.replace(/\s+/g, " ").trim().slice(0, 180)
+          : "";
+        const seconds = chapter ? Number(chapter.seconds) : NaN;
+        if (!title || !Number.isFinite(seconds) || seconds < 0) return;
+        const key = Math.round(seconds) + "\n" + title;
+        if (seen.has(key)) return;
+        seen.add(key);
+        chapters.push({ title, seconds: Math.round(seconds) });
+      });
+    }
+    chapters.sort((a, b) => a.seconds - b.seconds);
+    return {
+      videoId: raw && typeof raw.videoId === "string" ? raw.videoId : "",
+      description: raw && typeof raw.description === "string" ? raw.description : "",
+      chapters
+    };
+  }
+
+  function readPageMeta() {
+    const raw = document.documentElement && document.documentElement.getAttribute("data-tabyt-meta");
+    if (!raw) return emptyMeta();
+    try {
+      return sanitizeMeta(JSON.parse(raw));
+    } catch (_error) {
+      return emptyMeta();
+    }
+  }
+
+  function metaForCurrentVideo() {
+    const meta = pageMeta.videoId || pageMeta.description ? pageMeta : readPageMeta();
+    const id = videoId();
+    if (meta.videoId && id && meta.videoId !== id) return emptyMeta();
+    return meta;
+  }
+
   function watchRoot() {
     const root = document.querySelector("ytd-watch-flexy");
     if (!root || root.hidden) return null;
@@ -173,25 +266,22 @@
    */
   function isLiveVideo() {
     try {
-      if (new URL(location.href).pathname.indexOf("/live/") === 0) return true;
+      const path = new URL(location.href).pathname;
+      if (path === "/live" || path.indexOf("/live/") === 0) return true;
     } catch (_error) {
       /* fall through to the DOM checks */
     }
     const root = watchRoot();
     if (root) {
-      if (root.hasAttribute("is-live") || root.hasAttribute("live")) return true;
       if ((root.getAttribute("live-status") || "").toLowerCase() === "live") return true;
       if ((root.getAttribute("player-type") || "").toLowerCase() === "live") return true;
     }
-    const badge = document.querySelector(".ytp-live-badge");
-    if (badge && !badge.hidden) {
-      try {
-        if (getComputedStyle(badge).display !== "none") return true;
-      } catch (_error) {
-        return true;
-      }
-    }
-    return false;
+    /*
+     * The live badge element is in the player on every video. It only means
+     * a livestream when YouTube puts it on the live time display.
+     */
+    const badge = document.querySelector(".ytp-time-display.ytp-live .ytp-live-badge");
+    return !!(badge && !badge.hidden && badge.style.display !== "none");
   }
 
   function secondary() {
@@ -246,9 +336,103 @@
     glowVideo = null;
   }
 
-  function glowCtor() {
-    const lib = window.VideoAmbientGlow;
-    return lib && typeof lib.AmbientGlow === "function" ? lib.AmbientGlow : null;
+  /*
+   * Two draws of a ~96px bitmap, about 8 times a second. The first keeps the
+   * color grade. The second blur melts the patches that a single 8px blur
+   * leaves behind when the bitmap is stretched across the page. The scratch
+   * canvas stays off the document, so the compositor still has one layer.
+   * requestVideoFrameCallback only starts a sample. The loop stops while the
+   * tab is hidden or the video is paused, and the last frame stays up.
+   */
+  function createFrameGlow(video) {
+    const canvas = document.createElement("canvas");
+    const scratch = document.createElement("canvas");
+    const ctx = canvas.getContext("2d", { alpha: false, desynchronized: true });
+    const src = scratch.getContext("2d", { alpha: false, desynchronized: true });
+    let handle = 0;
+    let timer = 0;
+    let stopped = false;
+    const sampleMs = 125;
+
+    const paint = () => {
+      if (!ctx || !src || video.readyState < 2) return;
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+      if (!width || !height) return;
+      const scale = 96 / Math.max(width, height);
+      const cw = Math.max(1, Math.round(width * scale));
+      const ch = Math.max(1, Math.round(height * scale));
+      if (scratch.width !== cw) scratch.width = cw;
+      if (scratch.height !== ch) scratch.height = ch;
+      if (canvas.width !== cw) canvas.width = cw;
+      if (canvas.height !== ch) canvas.height = ch;
+      try {
+        src.filter = "blur(5px) saturate(1.35) brightness(0.8)";
+        src.drawImage(video, -8, -8, cw + 16, ch + 16);
+        src.filter = "none";
+        ctx.filter = "blur(8px)";
+        ctx.drawImage(scratch, 0, 0, cw, ch);
+        ctx.filter = "none";
+      } catch (_error) { /* A detached video throws. */ }
+    };
+
+    const stopLoop = () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = 0;
+      }
+      if (handle && typeof video.cancelVideoFrameCallback === "function") {
+        try { video.cancelVideoFrameCallback(handle); } catch (_error) { /* already gone */ }
+      }
+      handle = 0;
+    };
+
+    const arm = () => {
+      if (stopped || timer || handle) return;
+      if (document.hidden || video.paused || video.ended) return;
+      const draw = () => {
+        handle = 0;
+        if (stopped || document.hidden || video.paused || video.ended) return;
+        paint();
+        timer = setTimeout(() => {
+          timer = 0;
+          arm();
+        }, sampleMs);
+      };
+      if (typeof video.requestVideoFrameCallback === "function") {
+        handle = video.requestVideoFrameCallback(draw);
+      } else {
+        draw();
+      }
+    };
+
+    const wake = () => {
+      if (stopped || document.hidden) return;
+      if (video.paused || video.ended) {
+        paint();
+        return;
+      }
+      arm();
+    };
+
+    video.addEventListener("play", wake);
+    video.addEventListener("loadeddata", wake);
+    video.addEventListener("seeked", paint);
+    document.addEventListener("visibilitychange", wake);
+    wake();
+
+    return {
+      canvas,
+      destroy() {
+        stopped = true;
+        stopLoop();
+        video.removeEventListener("play", wake);
+        video.removeEventListener("loadeddata", wake);
+        video.removeEventListener("seeked", paint);
+        document.removeEventListener("visibilitychange", wake);
+        canvas.remove();
+      }
+    };
   }
 
   function playerInner() {
@@ -257,16 +441,16 @@
   }
 
   function ensureAmbient() {
-    const root = watchRoot();
-    const player = root && root.querySelector("#player");
-    if (!player) return null;
+    const parent = document.body;
+    if (!parent) return null;
     let host = document.getElementById("tabyt-ambient");
     if (!host) {
       host = document.createElement("div");
       host.id = "tabyt-ambient";
       host.setAttribute("aria-hidden", "true");
     }
-    if (host.parentElement !== player) player.insertBefore(host, player.firstChild);
+    if (host.parentElement !== parent) parent.appendChild(host);
+    document.documentElement.classList.add("tabyt-ambient");
     return host;
   }
 
@@ -280,25 +464,19 @@
   function syncGlow() {
     if (!settings.layoutEnabled || !settings.layoutAmbient) {
       destroyGlow();
+      document.documentElement.classList.remove("tabyt-ambient");
+      clearAmbientOrigin();
       const stale = document.getElementById("tabyt-ambient");
       if (stale) stale.remove();
       return;
     }
-    const Ctor = glowCtor();
     const video = document.querySelector("video.html5-main-video") ||
       document.querySelector("#movie_player video");
-    if (!Ctor || !video || !video.isConnected || !video.parentElement) return;
+    if (!video || !video.isConnected || !video.parentElement) return;
     if (!glow || glowVideo !== video) {
       destroyGlow();
       try {
-        glow = new Ctor(video, {
-          blur: 72,
-          opacity: 0.95,
-          brightness: 1.15,
-          saturate: 1.6,
-          scale: 1.35,
-          responsiveness: 0.28
-        });
+        glow = createFrameGlow(video);
         glowVideo = video;
       } catch (_error) {
         glow = null;
@@ -307,19 +485,17 @@
       }
     }
     placeGlowCanvas();
+    placeAmbientOrigin();
   }
 
   /*
-   * The ambient canvas is injected into #player. A direct video reload can
-   * replace either the <video> or the player container, leaving the canvas in a
-   * detached node. Check health rather than trusting a one-time init.
+   * The ambient canvas is fixed to the page. A video reload can drop the
+   * canvas. Check health rather than trusting a one-time init.
    */
   function ambientHealthy() {
     if (!settings.layoutEnabled || !settings.layoutAmbient) return true;
-    const root = watchRoot();
-    const player = root && root.querySelector("#player");
     const host = document.getElementById("tabyt-ambient");
-    if (!player || !host || !host.isConnected || host.parentElement !== player) return false;
+    if (!document.body || !host || !host.isConnected || host.parentElement !== document.body) return false;
     if (!glow || !glowVideo || !glowVideo.isConnected || !glow.canvas || !glow.canvas.isConnected) {
       return false;
     }
@@ -370,37 +546,6 @@
   let lastTargetW = 0;
   let lastTargetH = 0;
 
-  /*
-   * Walk a DOM node (and its open/closed shadow root) collecting all element nodes.
-   * Used to find every node that could clip overflow on the player chain.
-   */
-  function gatherOverflowNodes(rootNode) {
-    const collection = new Set();
-    const walk = (node) => {
-      if (!node || node.nodeType !== 1) return;
-      collection.add(node);
-      node.childNodes.forEach(walk);
-      if (node.shadowRoot) walk(node.shadowRoot);
-      try {
-        const dom = (globalThis.chrome && globalThis.chrome.dom) || (globalThis.browser && globalThis.browser.dom);
-        if (dom && dom.openOrClosedShadowRoot) {
-          const sr = dom.openOrClosedShadowRoot(node);
-          if (sr) walk(sr);
-        }
-      } catch (_e) {}
-      try { node.assignedNodes && node.assignedNodes({ flatten: true }).forEach(walk); } catch (_e) {}
-    };
-    walk(rootNode);
-    return collection;
-  }
-
-  // Shared overflow target set, populated by fitPlayer() and watched by ovObserver in start().
-  // Initialized as soon as the module loads so observers can reference it immediately.
-  const overflowTargets = new Set();
-  // Live guard: YouTube's player JS may flip overflow:hidden after our setImp runs.
-  // Two observers (fitPlayer + start) both create this, guarded by if (!ovObserver).
-  let ovObserver = null;
-
   function isFullscreen() {
     const root = watchRoot();
     return Boolean(
@@ -411,192 +556,142 @@
   }
 
   /*
-   * Theater-style sizing: the player fills the left column at 16:9, exactly like
-   * YouTube's theater mode. A 16:9 box means the metadata below it starts after
-   * the video instead of sliding underneath, and videos of another shape are
-   * letterboxed inside it by object-fit: contain, never cropped.
+   * Fit the player into the left column so the title and actions sit under it
+   * with no scrollbar. A full-width 16:9 box is taller than the viewport once
+   * the metadata is added, which is what forced #primary to scroll.
    *
-   * Sizes are written as CSS variables, never as inline pixel sizes on the
-   * player internals: author !important inline sizes beat the browser's
-   * fullscreen layout and used to break fullscreen. During fullscreen the CSS
-   * that consumes these variables is scoped out, so the browser always owns
-   * the real size.
+   * The drag handle is still opt-in. This fit runs whenever the layout is on.
+   * Sizes are CSS variables, not inline sizes on the player internals, so
+   * fullscreen can ignore them and the browser owns the real size.
    */
-  function fitPlayer() {
-    // If player resizing is disabled in settings, hand the player back to YouTube.
-    // The class gate in layout.css makes sure none of the player-sizing rules
-    // apply, so the video keeps its native dimensions and cannot be collapsed.
-    if (!settings.playerResize) {
-      clearFitStyles();
-      lastTargetW = 0;
-      lastTargetH = 0;
-      document.documentElement.classList.remove("tabyt-player-resize", "tabyt-fullscreen");
-      document.documentElement.style.removeProperty("--tabyt-player-width");
-      document.documentElement.style.removeProperty("--tabyt-player-height");
-      /*
-       * These two were written directly onto ytd-watch-flexy when resizing was
-       * on, so styleBackup/clearFitStyles() does not know about them. Leaving
-       * them behind makes YouTube keep the old player size even after the
-       * setting is switched off in the same tab.
-       */
-      const offRoot = watchRoot();
-      if (offRoot) {
-        offRoot.style.removeProperty("--ytd-watch-flexy-player-width");
-        offRoot.style.removeProperty("--ytd-watch-flexy-player-height");
-      }
-      return;
+  function clearPlayerBox() {
+    clearFitStyles();
+    lastTargetW = 0;
+    lastTargetH = 0;
+    document.documentElement.classList.remove("tabyt-player-fit");
+    document.documentElement.style.removeProperty("--tabyt-player-width");
+    document.documentElement.style.removeProperty("--tabyt-player-height");
+    const root = watchRoot();
+    if (root) {
+      root.style.removeProperty("--ytd-watch-flexy-player-width");
+      root.style.removeProperty("--ytd-watch-flexy-player-height");
     }
-    document.documentElement.classList.add("tabyt-player-resize");
+  }
+
+  function fitPlayer() {
+    document.documentElement.classList.toggle("tabyt-player-resize", !!settings.playerResize);
     if (isFullscreen()) {
-      clearFitStyles();
-      lastTargetW = 0;
-      lastTargetH = 0;
+      clearPlayerBox();
       document.documentElement.classList.add("tabyt-fullscreen");
-      const root = watchRoot();
-      if (root) {
-        root.style.removeProperty("--ytd-watch-flexy-player-width");
-        root.style.removeProperty("--ytd-watch-flexy-player-height");
-      }
       return;
     }
     document.documentElement.classList.remove("tabyt-fullscreen");
     const root = watchRoot();
-    if (!root) {
-      clearFitStyles();
-      return;
-    }
+    const primary = root && root.querySelector("#primary");
+    const player = root && root.querySelector("#player");
+    if (!root || !primary || !player) return;
 
-    const player = root.querySelector("#player");
-    const parent = player && player.parentElement;
-    if (!player || !parent) return;
+    const primaryStyle = getComputedStyle(primary);
+    const padX = (parseFloat(primaryStyle.paddingLeft) || 0) + (parseFloat(primaryStyle.paddingRight) || 0);
+    const padY = (parseFloat(primaryStyle.paddingTop) || 0) + (parseFloat(primaryStyle.paddingBottom) || 0);
+    const below = root.querySelector("#below");
+    const belowH = below ? below.offsetHeight : 0;
+    const gap = belowH > 0 ? 8 : 0;
+    const availW = Math.floor(primary.clientWidth - padX);
+    const availH = Math.floor(primary.clientHeight - padY - belowH - gap);
+    if (availW < 160 || availH < 120) return;
 
-    /*
-     * Measure the parent's content box so the player never overflows it when
-     * YouTube leaves padding on #primary-inner. This is cheap, so it runs
-     * before any gathering: when the size is unchanged we can bail out
-     * without walking the player's shadow DOM or rewriting styles, which is
-     * what used to lag while resizing.
-     */
-    const parentStyle = getComputedStyle(parent);
-    const availableWidth = Math.floor(
-      parent.clientWidth -
-      (parseFloat(parentStyle.paddingLeft) || 0) -
-      (parseFloat(parentStyle.paddingRight) || 0)
-    );
-    if (availableWidth < 160) return;
-
-    // Use actual video aspect ratio, fall back to 16:9
     const video = document.querySelector("video.html5-main-video") || document.querySelector("#movie_player video");
     const ratio = (video && video.videoWidth > 0 && video.videoHeight > 0)
       ? video.videoWidth / video.videoHeight
       : 16 / 9;
 
-    const targetW = availableWidth;
-    const targetH = Math.max(120, Math.round(targetW / ratio));
-
-    if (lastTargetW === targetW && lastTargetH === targetH) {
-      ensureAmbient();
-      return;
-    }
-
-    /*
-     * YouTube's player JS sets overflow:hidden on #movie_player / ytd-player,
-     * which clips the bottom control bar when the player box is exactly sized.
-     * Inline !important beats stylesheet rules, but we clear it on fullscreen.
-     * Reach into ytd-player's shadow root too: in Chromium the real player lives
-     * there and a document-level query misses it. Only run when the size
-     * changed — the common resize path now bails out above.
-     */
-    const playerHost = root.querySelector("ytd-player");
-    [
-      "#player-container-outer", "#player-container-inner", "#player-container",
-      "ytd-player", "#movie_player", ".html5-video-player"
-    ].forEach((sel) => {
-      root.querySelectorAll(sel).forEach((node) => overflowTargets.add(node));
-    });
-
-    // Player host and its shadow root
-    if (playerHost) {
-      const playerSR = playerHost.shadowRoot;
-      if (playerSR) gatherOverflowNodes(playerSR).forEach((node) => overflowTargets.add(node));
-    }
-
-    // Also walk the light-DOM chain from #player down
-    const lightPlayer = root.querySelector("#player");
-    if (lightPlayer) gatherOverflowNodes(lightPlayer).forEach((node) => overflowTargets.add(node));
-
-    const controls = root.querySelector(".ytp-chrome-bottom") ||
-      (playerHost && playerHost.shadowRoot && playerHost.shadowRoot.querySelector(".ytp-chrome-bottom"));
-    const gradient = root.querySelector(".ytp-gradient-bottom") ||
-      (playerHost && playerHost.shadowRoot && playerHost.shadowRoot.querySelector(".ytp-gradient-bottom"));
-    if (controls) {
-      setImp(controls, "bottom", "0px");
-      let node = controls.parentElement;
-      while (node && node !== root) {
-        overflowTargets.add(node);
-        if (node.id === "movie_player" || node.id === "player") break;
-        node = node.parentElement;
+    let targetH = Math.round(availW / ratio);
+    let targetW = availW;
+    if (targetH > availH) {
+      targetH = availH;
+      targetW = Math.max(160, Math.round(targetH * ratio));
+      if (targetW > availW) {
+        targetW = availW;
+        targetH = Math.max(120, Math.round(targetW / ratio));
       }
     }
-    if (gradient) setImp(gradient, "bottom", "0px");
-    overflowTargets.forEach((node) => setImp(node, "overflow", "visible"));
 
-    // Start a live guard that re-applies overflow:visible whenever YouTube resets it.
-    if (!ovObserver) {
-      ovObserver = new MutationObserver(() => {
-        overflowTargets.forEach((node) => setImp(node, "overflow", "visible"));
-        const ph = root.querySelector("ytd-player");
-        if (ph && ph.shadowRoot) {
-          gatherOverflowNodes(ph.shadowRoot).forEach((node) => setImp(node, "overflow", "visible"));
-        }
-      });
-      const targetNodes = [root.querySelector("#player"), root.querySelector("ytd-player"), playerHost].filter(Boolean);
-      targetNodes.forEach((n) => {
-        if (n) ovObserver.observe(n, { attributes: true, subtree: true, attributeFilter: ["style", "class"] });
-      });
-    }
+    placeAmbientOrigin();
+    if (lastTargetW === targetW && lastTargetH === targetH) return;
 
     lastTargetW = targetW;
     lastTargetH = targetH;
+    document.documentElement.classList.add("tabyt-player-fit");
 
     const widthPx = targetW + "px";
     const heightPx = targetH + "px";
-
     document.documentElement.style.setProperty("--tabyt-player-width", widthPx);
     document.documentElement.style.setProperty("--tabyt-player-height", heightPx);
     root.style.setProperty("--ytd-watch-flexy-player-width", widthPx);
     root.style.setProperty("--ytd-watch-flexy-player-height", heightPx);
-
     ensureAmbient();
+  }
+
+  /*
+   * The page wash is masked to the player, so the color looks like it is
+   * spilling out of the video instead of sitting as a flat wallpaper.
+   */
+  function placeAmbientOrigin() {
+    if (!settings.layoutEnabled || !settings.layoutAmbient || isFullscreen()) return;
+    const root = watchRoot();
+    const player = root && root.querySelector("#player");
+    if (!player) return;
+    const rect = player.getBoundingClientRect();
+    if (rect.width < 40 || rect.height < 40) return;
+    const x = ((rect.left + rect.width / 2) / Math.max(window.innerWidth, 1) * 100).toFixed(1) + "%";
+    const y = ((rect.top + rect.height / 2) / Math.max(window.innerHeight, 1) * 100).toFixed(1) + "%";
+    const rx = Math.round(Math.max(rect.width * 0.9, 280)) + "px";
+    const ry = Math.round(Math.max(rect.height * 1.2, 220)) + "px";
+    const el = document.documentElement;
+    if (el.style.getPropertyValue("--tabyt-glow-x") === x &&
+        el.style.getPropertyValue("--tabyt-glow-y") === y &&
+        el.style.getPropertyValue("--tabyt-glow-rx") === rx &&
+        el.style.getPropertyValue("--tabyt-glow-ry") === ry) return;
+    el.style.setProperty("--tabyt-glow-x", x);
+    el.style.setProperty("--tabyt-glow-y", y);
+    el.style.setProperty("--tabyt-glow-rx", rx);
+    el.style.setProperty("--tabyt-glow-ry", ry);
+  }
+
+  function clearAmbientOrigin() {
+    const el = document.documentElement;
+    el.style.removeProperty("--tabyt-glow-x");
+    el.style.removeProperty("--tabyt-glow-y");
+    el.style.removeProperty("--tabyt-glow-rx");
+    el.style.removeProperty("--tabyt-glow-ry");
   }
 
   function observePrimary() {
     const root = watchRoot();
     const primary = root && root.querySelector("#primary");
     if (!primary || typeof ResizeObserver !== "function") return;
-    if (mainObserver && mainObserver.__target === primary) return;
+    const below = root.querySelector("#below");
+    if (mainObserver && mainObserver.__target === primary) {
+      if (below && !below.__tabytObserved) {
+        mainObserver.observe(below);
+        below.__tabytObserved = true;
+      }
+      return;
+    }
     if (mainObserver) mainObserver.disconnect();
     mainObserver = new ResizeObserver(() => fitPlayer());
     mainObserver.__target = primary;
     mainObserver.observe(primary);
-
-    const player = root.querySelector("#player");
-    if (player) mainObserver.observe(player);
-
-    if (playerAttrObserver) playerAttrObserver.disconnect();
-    playerAttrObserver = new MutationObserver(() => fitPlayer());
-    if (player) playerAttrObserver.observe(player, { attributes: true, attributeFilter: ["style", "class"], subtree: true });
-    const playerHost = root.querySelector("ytd-player");
-    const sr = playerHost && (playerHost.shadowRoot || (() => { try { const dom = (globalThis.chrome && globalThis.chrome.dom) || (globalThis.browser && globalThis.browser.dom); return dom && dom.openOrClosedShadowRoot ? dom.openOrClosedShadowRoot(playerHost) : null; } catch (_e) { return null; } })());
-    if (sr) playerAttrObserver.observe(sr, { attributes: true, attributeFilter: ["style", "class"], subtree: true });
-
-    // ovObserver is shared with fitPlayer(); only create once, fitPlayer populates overflowTargets.
+    if (below) {
+      mainObserver.observe(below);
+      below.__tabytObserved = true;
+    }
 
     const video = document.querySelector("video.html5-main-video") || document.querySelector("#movie_player video");
     if (video && !video.__tabytMetaBound) {
       video.__tabytMetaBound = true;
       video.addEventListener("loadedmetadata", () => fitPlayer());
-      video.addEventListener("canplay", () => fitPlayer());
     }
   }
 
@@ -608,19 +703,36 @@
 
   function setSide(px, persist) {
     const next = Math.round(Math.min(680, Math.max(280, px)));
-    const value = next + "px";
-    document.documentElement.style.setProperty("--tabyt-side", value);
-    if (persist !== false) {
-      try { sessionStorage.setItem(SIDE_KEY, value); } catch (_error) { /* Private mode can block storage. */ }
-    }
+    document.documentElement.style.setProperty("--tabyt-side", next + "px");
+    if (persist !== false && settings.rememberLayoutSize) persistSide(next);
     fitPlayer();
   }
 
-  function applySavedSide() {
+  function persistSide(px) {
+    settings.layoutSide = px;
+    saveEarly();
+    if (!api || !api.storage || !api.storage.local) return;
+    const write = (current) => {
+      const base = current && current[SETTINGS_KEY] && typeof current[SETTINGS_KEY] === "object"
+        ? current[SETTINGS_KEY]
+        : {};
+      try {
+        api.storage.local.set({ [SETTINGS_KEY]: Object.assign({}, base, { layoutSide: px }) });
+      } catch (_error) { /* Storage can reject in private contexts. */ }
+    };
     try {
-      const saved = sessionStorage.getItem(SIDE_KEY);
-      if (saved) document.documentElement.style.setProperty("--tabyt-side", saved);
+      const pending = api.storage.local.get(SETTINGS_KEY, write);
+      if (pending && typeof pending.then === "function") pending.then(write).catch(() => {});
     } catch (_error) { /* Ignore storage failures. */ }
+  }
+
+  function applySavedSide() {
+    if (settings.rememberLayoutSize === false) {
+      document.documentElement.style.removeProperty("--tabyt-side");
+      return;
+    }
+    const width = Math.round(Math.min(680, Math.max(280, Number(settings.layoutSide) || 420)));
+    document.documentElement.style.setProperty("--tabyt-side", width + "px");
   }
 
   function cancelDrag() {
@@ -706,13 +818,11 @@
     if (ambient) ambient.remove();
     destroyGlow();
     if (mainObserver) { mainObserver.disconnect(); mainObserver = null; }
-    if (playerAttrObserver) { playerAttrObserver.disconnect(); playerAttrObserver = null; }
-    if (ovObserver) { ovObserver.disconnect(); ovObserver = null; }
     clearFitStyles();
     lastTargetW = 0;
     lastTargetH = 0;
     panelScroll.clear();
-    document.documentElement.classList.remove("tabyt-layout-on", "tabyt-dragging", "tabyt-rail-info", "tabyt-fullscreen", "tabyt-player-resize", "tabyt-live-stream", "tabyt-entering");
+    document.documentElement.classList.remove("tabyt-layout-on", "tabyt-dragging", "tabyt-rail-info", "tabyt-fullscreen", "tabyt-player-resize", "tabyt-player-fit", "tabyt-live-stream", "tabyt-entering", "tabyt-ambient");
     if (enterTimer) {
       clearTimeout(enterTimer);
       enterTimer = 0;
@@ -720,6 +830,7 @@
     document.documentElement.style.removeProperty("--tabyt-side");
     document.documentElement.style.removeProperty("--tabyt-player-width");
     document.documentElement.style.removeProperty("--tabyt-player-height");
+    clearAmbientOrigin();
     const root = watchRoot();
     if (root) {
       root.style.removeProperty("--ytd-watch-flexy-player-width");
@@ -797,48 +908,28 @@
     dead.forEach((node) => node.remove());
   }
 
-  /* Views, upload date and likes stay visible in the Info tab. */
-  function statsLine() {
-    const parts = [];
-    const info = deepFind(document, "ytd-watch-metadata #info") ||
-      firstMatch(["ytd-watch-flexy #info", "#info"]);
-    const infoText = nodeText(info);
-    if (infoText) parts.push(infoText);
-
-    const likeButton = deepFind(document, "ytd-watch-metadata #top-level-buttons-computed like-button-view-model button") ||
-      firstMatch(["#top-level-buttons-computed like-button-view-model button", "like-button-view-model button"]);
-    let likeText = "";
-    if (likeButton) {
-      const label = likeButton.getAttribute("aria-label") || "";
-      const exact = label.match(/([\d,.]+)\s*other people/i);
-      likeText = exact ? exact[1] : nodeText(likeButton);
-    }
-    if (likeText) parts.push(likeText + " likes");
-    return parts.join("  ·  ");
+  /*
+   * YouTube keeps the full description in #expanded and only shows it after
+   * "...more". Click that control once while it is still collapsed. The
+   * expander itself is hidden under the player, so the click does not open
+   * a second copy there.
+   */
+  function revealFullDescription(descNode) {
+    const expand = deepFind(descNode, "#expand");
+    if (!expand || expand.hidden) return;
+    try { expand.click(); } catch (_error) { /* The control may already be gone. */ }
   }
 
   function descriptionContent(descNode) {
     if (!descNode) return null;
-    /* #expanded exists even before the native toggle is clicked. */
+    /* Stay inside the description. Walking up pulls in the title and channel. */
     const expanded = deepFind(descNode, "#expanded");
     if (expanded && nodeText(expanded)) return expanded;
     const collapsed = deepFind(descNode, "#collapsed");
     if (collapsed && nodeText(collapsed)) return collapsed;
-    /*
-     * The expander may hold only a snippet of the description; the component
-     * hosts above it carry the full text. Use the ancestor with the longest
-     * text so the copy and the "more" toggle show the real description.
-     */
-    let source = descNode;
-    let node = descNode.parentElement;
-    let guard = 0;
-    while (node && guard < 6) {
-      const text = nodeText(node);
-      if (text && text.length > nodeText(source).length) source = node;
-      node = node.parentElement;
-      guard += 1;
-    }
-    return source;
+    const snippet = deepFind(descNode, "#snippet-text") || deepFind(descNode, "#snippet");
+    if (snippet && nodeText(snippet)) return snippet;
+    return descNode;
   }
 
   /*
@@ -870,66 +961,480 @@
   }
 
   function addDescriptionToggle(info, body, descNode, titleText) {
-    const content = document.createElement("div");
-    content.className = "tabyt-desc-content";
-    const source = descriptionContent(descNode);
-    let clone = source ? source.cloneNode(true) : null;
-    if (clone) {
-      /*
-       * The Info panel keeps the title and stats in their own side column, so
-       * drop them from the description copy too (the longest-ancestor source
-       * can include the owner/views line).
-       */
-      if (titleText) {
-        const title = titleText.replace(/\s+/g, " ").trim().slice(0, 120);
-        clone.querySelectorAll("*").forEach((el) => {
-          const text = nodeText(el);
-          if (text && title && text.indexOf(title) !== -1 && text.length <= title.length + 40) {
-            el.remove();
-          }
-        });
-      }
-    }
-    if (clone) {
-      clone.removeAttribute("id");
-      clone.querySelectorAll("[id]").forEach((child) => child.removeAttribute("id"));
+    mountDomDescription(body, descNode);
+    if (titleText && info) info.__infoVideoKey = info.__infoVideoKey || titleText;
+  }
 
-      /* Unwrap any remaining component shell so no shadow toggle can linger. */
-      const unwrap = (node) => {
-        const plain = document.createElement("div");
-        while (node.firstChild) plain.appendChild(node.firstChild);
-        return plain;
-      };
-      if (clone.tagName === "YTD-TEXT-INLINE-EXPANDER") {
-        clone = unwrap(clone);
-      } else {
-        for (const expander of clone.querySelectorAll("ytd-text-inline-expander")) {
-          expander.replaceWith(unwrap(expander));
-        }
-      }
-      stripDeadToggles(clone);
-      clone.classList.add("tabyt-desc-text");
-      content.appendChild(clone);
-    }
+  function formatStamp(total) {
+    const seconds = Math.max(0, Math.round(Number(total) || 0));
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remain = seconds % 60;
+    if (hours > 0) return hours + ":" + String(minutes).padStart(2, "0") + ":" + String(remain).padStart(2, "0");
+    return minutes + ":" + String(remain).padStart(2, "0");
+  }
 
-    // The description is expanded by default — no "show more" toggle.
-    body.append(content);
-    body.classList.add("tabyt-desc-expanded");
-    appendChapters(content, descNode);
+  function parseStamp(text) {
+    const parts = String(text).split(":").map((part) => Number(part));
+    if (parts.some((part) => !Number.isFinite(part))) return 0;
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return 0;
+  }
+
+  function appendDescriptionImages(parent, descNode) {
+    if (!parent || !descNode || typeof descNode.querySelectorAll !== "function") return;
+    const scope = descNode.closest ? (descNode.closest("#description") || descNode.closest("ytd-watch-metadata") || descNode) : descNode;
+    const seen = new Set();
+    parent.querySelectorAll("img").forEach((image) => seen.add(image.src));
+    const hosts = [scope];
+    if (scope.querySelector) {
+      const structured = scope.querySelector("#structured-description");
+      if (structured) hosts.push(structured);
+    }
+    hosts.forEach((host) => {
+      let images = [];
+      try { images = host.querySelectorAll("img"); } catch (_error) { images = []; }
+      images.forEach((image) => {
+        const src = image.currentSrc || image.getAttribute("src") || "";
+        if (src.indexOf("https://") !== 0 || seen.has(src)) return;
+        const wide = image.naturalWidth || image.width || 0;
+        if (wide && wide < 64) return;
+        seen.add(src);
+        const copy = document.createElement("img");
+        copy.className = "tabyt-desc-image";
+        copy.alt = image.alt || "";
+        copy.src = src;
+        copy.loading = "lazy";
+        parent.appendChild(copy);
+      });
+    });
+  }
+
+  function renderChapterRows(parent, chapters) {
+    if (!chapters.length) return;
+    const list = document.createElement("div");
+    list.className = "tabyt-chapter-list";
+    chapters.forEach((chapter) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "tabyt-chapter";
+      button.setAttribute("data-seconds", String(chapter.seconds));
+      const imageUrl = typeof chapter.image === "string" && chapter.image.indexOf("https://") === 0
+        ? chapter.image
+        : "";
+      if (imageUrl) {
+        const image = document.createElement("img");
+        image.className = "tabyt-chapter-thumb";
+        image.alt = "";
+        image.src = imageUrl;
+        image.loading = "lazy";
+        button.appendChild(image);
+      }
+      const copy = document.createElement("span");
+      copy.className = "tabyt-chapter-copy";
+      const time = document.createElement("span");
+      time.className = "tabyt-chapter-time";
+      time.textContent = formatStamp(chapter.seconds);
+      const label = document.createElement("span");
+      label.className = "tabyt-chapter-title";
+      label.textContent = chapter.title;
+      copy.append(time, label);
+      button.appendChild(copy);
+      list.appendChild(button);
+    });
+    parent.appendChild(list);
   }
 
   /*
-   * Build the Info panel from a copy of YouTube's title and description. The
-   * copy is only rebuilt when the source text changes, so it stays put while
-   * YouTube re-renders the real nodes in the left column (which we hide).
+   * Chapter rows already list these lines. A description that repeats
+   * "0:00 Intro" under the list is the same data twice.
+   */
+  function proseWithoutChapterDump(text, chapters) {
+    if (!chapters.length) return text;
+    return String(text || "").split("\n").filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return true;
+      return !/^(?:\d{1,2}:)?\d{1,2}:\d{2}\b/.test(trimmed);
+    }).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  function infoHeading(text) {
+    const heading = document.createElement("h3");
+    heading.className = "tabyt-info-heading";
+    heading.textContent = text;
+    return heading;
+  }
+
+  function infoCard(title) {
+    const section = document.createElement("section");
+    section.className = "tabyt-info-section tabyt-info-card";
+    if (title) section.appendChild(infoHeading(title));
+    return section;
+  }
+
+  function infoShell() {
+    const content = document.createElement("div");
+    content.className = "tabyt-desc-content";
+    return content;
+  }
+
+  function descriptionScope(descNode) {
+    if (!descNode || !descNode.closest) return null;
+    return descNode.closest("#description, ytd-watch-metadata, ytd-watch-flexy");
+  }
+
+  function linkChip(href) {
+    const link = document.createElement("a");
+    link.className = "tabyt-info-link";
+    link.href = href;
+    link.rel = "noreferrer noopener";
+    let label = href;
+    try {
+      const parsed = new URL(href);
+      const host = parsed.hostname.replace(/^www\./i, "");
+      const slug = parsed.pathname.split("/").filter(Boolean).pop() || "";
+      if (/instagram/i.test(host)) label = "Instagram";
+      else if (/tiktok/i.test(host)) label = "TikTok";
+      else if (/discord/i.test(host)) label = "Discord";
+      else if (/spotify/i.test(host)) label = "Spotify";
+      else if (/twitter|x\.com/i.test(host)) label = "X";
+      else if (/youtu/i.test(host)) label = "YouTube";
+      else label = host;
+      if (slug && slug.length <= 24) label = label + " · " + slug.replace(/^@/, "@");
+    } catch (_error) { /* keep the raw href */ }
+    link.textContent = label;
+    return link;
+  }
+
+  const STRUCTURED_BODY_TAGS = new Set([
+    "YTD-EXPANDABLE-VIDEO-DESCRIPTION-BODY-RENDERER",
+    "YTD-TEXT-INLINE-EXPANDER",
+    "YTD-VIDEO-DESCRIPTION-HEADER-RENDERER"
+  ]);
+
+  const STRUCTURED_SECTION_SELECTORS = [
+    "ytd-macro-markers-list-renderer",
+    "ytd-video-description-infocards-section-renderer",
+    "ytd-video-description-transcript-section-renderer",
+    "ytd-horizontal-card-list-renderer",
+    "yt-video-description-youchat-section-view-model"
+  ].join(",");
+
+  function structuredSectionTitle(node) {
+    if (!node) return "";
+    if (isChapterStructuredNode(node)) return "Chapters";
+    const tag = node.tagName || "";
+    if (/YOUTUBECHAT/i.test(tag) || /youchat/i.test(tag)) return "";
+    if (/people mentioned/i.test(nodeText(node))) return "People mentioned";
+    if (/transcript/i.test(nodeText(node)) && tag === "YTD-VIDEO-DESCRIPTION-TRANSCRIPT-SECTION-RENDERER") {
+      return "Transcript";
+    }
+    if (tag === "YTD-HORIZONTAL-CARD-LIST-RENDERER") {
+      return isChapterStructuredNode(node) ? "Chapters" : "People mentioned";
+    }
+    if (tag === "YTD-VIDEO-DESCRIPTION-INFOCARDS-SECTION-RENDERER") return "Links";
+    const tagged = node.querySelector("#title, .title, h2, h3");
+    const text = nodeText(tagged);
+    if (/^chapters$/i.test(text)) return "Chapters";
+    if (/^ask$/i.test(text)) return "";
+    if (text && text.length <= 32) return text;
+    return "";
+  }
+
+  function explodeStructuredItem(item) {
+    if (!item) return [];
+    if (item.id === "items") {
+      let pieces = [];
+      try {
+        pieces = Array.from(item.querySelectorAll(STRUCTURED_SECTION_SELECTORS));
+      } catch (_error) { pieces = []; }
+      if (pieces.length) return pieces;
+    }
+    if (item.children && item.children.length > 1) {
+      let nested = [];
+      try {
+        nested = Array.from(item.querySelectorAll(":scope > " + STRUCTURED_SECTION_SELECTORS));
+      } catch (_error) { nested = []; }
+      if (nested.length > 1) return nested;
+    }
+    return [item];
+  }
+
+  /*
+   * YouTube's horizontal chapter scroller absolutely positions each marker.
+   * In the narrow rail those nodes paint over later cards unless we drop
+   * them when TabYT already rendered chapters from JSON.
+   */
+  function isChapterStructuredNode(node) {
+    if (!node || !node.tagName) return false;
+    const tag = node.tagName;
+    if (tag === "YTD-MACRO-MARKERS-LIST-RENDERER") return true;
+    try {
+      if (node.querySelector("ytd-macro-markers-list-item-renderer")) return true;
+    } catch (_error) { /* ignore */ }
+    const titled = node.querySelector("#title, h2, h3, .title");
+    const titleText = nodeText(titled);
+    if (/^chapters$/i.test(titleText)) return true;
+    return false;
+  }
+
+  /*
+   * YouTube's structured description holds people mentioned, link cards and
+   * the transcript button. Move each block into its own card so the rail
+   * does not inherit the player's cramped horizontal layout.
+   */
+  function mountStructuredCards(content, descNode, skipBody, skipChapters) {
+    const scope = descriptionScope(descNode);
+    if (!scope || !content) return;
+    const structured = scope.querySelector("ytd-structured-description-content-renderer, #structured-description");
+    if (!structured) return;
+    revealFullDescription(descNode);
+    // Moving live nodes keeps shadow roots (avatars, link icons, transcript controls).
+    const kids = Array.from(structured.children);
+    kids.forEach((item) => {
+      if (skipBody && STRUCTURED_BODY_TAGS.has(item.tagName)) {
+        item.remove();
+        return;
+      }
+      explodeStructuredItem(item).forEach((piece) => {
+        if (skipChapters && isChapterStructuredNode(piece)) {
+          piece.remove();
+          return;
+        }
+        const title = structuredSectionTitle(piece);
+        if (!title && /youchat/i.test(piece.tagName || "")) {
+          piece.remove();
+          return;
+        }
+        if (!nodeText(piece)) {
+          piece.remove();
+          return;
+        }
+        const section = infoCard(title);
+        section.classList.add("tabyt-info-structured-card");
+        const wrap = document.createElement("div");
+        wrap.className = "tabyt-info-structured";
+        wrap.appendChild(piece);
+        section.appendChild(wrap);
+        content.appendChild(section);
+      });
+      if (item.id === "items" && !item.children.length) item.remove();
+    });
+  }
+
+  function proseFromExpander(descNode) {
+    if (!descNode) return "";
+    revealFullDescription(descNode);
+    const expander = (descNode.matches && descNode.matches("ytd-text-inline-expander"))
+      ? descNode
+      : (deepFind(descNode, "ytd-text-inline-expander") || descriptionContent(descNode));
+    if (!expander) return nodeText(descNode);
+    const expanded = deepFind(expander, "#expanded");
+    return nodeText(expanded) || nodeText(expander);
+  }
+
+  function appendRichText(parent, text) {
+    const block = document.createElement("div");
+    block.className = "tabyt-desc-text";
+    const pattern = /https?:\/\/[^\s<>"]+|(?:\d{1,2}:)?\d{1,2}:\d{2}/g;
+    let last = 0;
+    let linkRow = null;
+    let match = pattern.exec(text);
+    while (match) {
+      if (match.index > last) {
+        block.appendChild(document.createTextNode(text.slice(last, match.index)));
+        linkRow = null;
+      }
+      const token = match[0];
+      if (token.charAt(0) === "h") {
+        const href = token.replace(/[),.;]+$/, "");
+        if (!linkRow) {
+          linkRow = document.createElement("div");
+          linkRow.className = "tabyt-info-link-row";
+          block.appendChild(linkRow);
+        }
+        linkRow.appendChild(linkChip(href));
+        if (href.length < token.length) block.appendChild(document.createTextNode(token.slice(href.length)));
+      } else {
+        linkRow = null;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "tabyt-timestamp";
+        button.textContent = token;
+        button.setAttribute("data-seconds", String(parseStamp(token)));
+        block.appendChild(button);
+      }
+      last = match.index + token.length;
+      match = pattern.exec(text);
+    }
+    if (last < text.length) block.appendChild(document.createTextNode(text.slice(last)));
+    parent.appendChild(block);
+  }
+
+  function renderJsonDescription(body, text, chapters, descNode) {
+    const content = infoShell();
+    if (chapters.length) {
+      const section = infoCard("Chapters");
+      renderChapterRows(section, chapters);
+      content.appendChild(section);
+    }
+    const prose = proseWithoutChapterDump(text, chapters);
+    if (prose) {
+      const section = infoCard("Description");
+      appendRichText(section, prose);
+      content.appendChild(section);
+    }
+    mountStructuredCards(content, descNode, Boolean(prose), chapters.length > 0);
+    body.append(content);
+    body.classList.add("tabyt-desc-expanded");
+  }
+
+  function mountDomDescription(body, descNode) {
+    const content = infoShell();
+    const prose = proseFromExpander(descNode);
+    if (prose) {
+      const section = infoCard("Description");
+      appendRichText(section, prose);
+      content.appendChild(section);
+    }
+    mountStructuredCards(content, descNode, true);
+    body.append(content);
+    body.classList.add("tabyt-desc-expanded");
+  }
+
+  function readSkips() {
+    const raw = document.documentElement && document.documentElement.getAttribute("data-tabyt-skips");
+    if (!raw) return { videoId: "", segments: [] };
+    try {
+      const parsed = JSON.parse(raw);
+      const segments = [];
+      (Array.isArray(parsed.segments) ? parsed.segments : []).forEach((segment) => {
+        const start = Number(segment && segment.start);
+        const end = Number(segment && segment.end);
+        const label = segment && typeof segment.label === "string" ? segment.label.slice(0, 80) : "";
+        const category = segment && typeof segment.category === "string" ? segment.category.slice(0, 40) : "sponsor";
+        const note = segment && typeof segment.note === "string" ? segment.note.slice(0, 180) : "";
+        if (!label || !Number.isFinite(start) || !Number.isFinite(end) || end <= start) return;
+        segments.push({ category, label, start, end, note });
+      });
+      return {
+        videoId: parsed && typeof parsed.videoId === "string" ? parsed.videoId : "",
+        segments
+      };
+    } catch (_error) {
+      return { videoId: "", segments: [] };
+    }
+  }
+
+  function skipsForCurrentVideo() {
+    const data = readSkips();
+    const id = videoId();
+    if (!settings.layoutSkips || (data.videoId && id && data.videoId !== id)) {
+      return { videoId: "", segments: [] };
+    }
+    return data;
+  }
+
+  function renderSkips(info) {
+    if (!info) return;
+    const existing = info.querySelector(":scope > .tabyt-skips");
+    const data = skipsForCurrentVideo();
+    if (!data.segments.length) {
+      if (existing) existing.remove();
+      return;
+    }
+    const key = data.segments.map((segment) => segment.category + segment.start + segment.end).join("|");
+    if (existing && existing.getAttribute("data-key") === key) return;
+    if (existing) existing.remove();
+
+    const block = document.createElement("section");
+    block.className = "tabyt-skips tabyt-info-card";
+    block.setAttribute("data-key", key);
+    const heading = document.createElement("p");
+    heading.className = "tabyt-skips-title";
+    heading.textContent = "Skipped by ";
+    const credit = document.createElement("a");
+    credit.href = "https://sponsor.ajay.app";
+    credit.textContent = "SponsorBlock";
+    credit.rel = "noreferrer noopener";
+    heading.appendChild(credit);
+    block.appendChild(heading);
+
+    data.segments.forEach((segment) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "tabyt-skip";
+      button.setAttribute("data-category", segment.category);
+      button.setAttribute("data-seconds", String(segment.start));
+      const time = document.createElement("span");
+      time.textContent = formatStamp(segment.start) + " – " + formatStamp(segment.end);
+      const label = document.createElement("span");
+      label.textContent = segment.note ? segment.label + " · " + segment.note : segment.label;
+      button.append(time, label);
+      block.appendChild(button);
+    });
+    info.insertBefore(block, info.firstChild);
+  }
+
+  function paintSkipMarks() {
+    const data = skipsForCurrentVideo();
+    const video = document.querySelector("video.html5-main-video") || document.querySelector("#movie_player video");
+    const fromVideo = video && Number.isFinite(video.duration) ? video.duration : 0;
+    const fromSegments = data.segments.reduce((max, segment) => Math.max(max, segment.end), 0);
+    const duration = fromVideo || fromSegments;
+    document.querySelectorAll(".tabyt-pc-progress, #movie_player .ytp-progress-bar").forEach((bar) => {
+      let layer = bar.querySelector(":scope > .tabyt-skip-marks");
+      if (!data.segments.length || duration <= 0) {
+        if (layer) layer.remove();
+        return;
+      }
+      if (!layer) {
+        layer = document.createElement("div");
+        layer.className = "tabyt-skip-marks";
+        bar.appendChild(layer);
+      }
+      const key = data.segments.map((segment) => segment.start + ":" + segment.end).join("|") + "@" + Math.round(duration);
+      if (layer.getAttribute("data-key") === key) return;
+      layer.setAttribute("data-key", key);
+      layer.textContent = "";
+      data.segments.forEach((segment) => {
+        const mark = document.createElement("span");
+        mark.className = "tabyt-skip-mark";
+        mark.setAttribute("data-category", segment.category);
+        mark.style.left = Math.min(100, (segment.start / duration) * 100) + "%";
+        mark.style.width = Math.max(0.4, ((segment.end - segment.start) / duration) * 100) + "%";
+        layer.appendChild(mark);
+      });
+    });
+  }
+
+  function seekVideo(seconds) {
+    const time = Number(seconds);
+    if (!Number.isFinite(time) || time < 0) return;
+    const video = document.querySelector("video.html5-main-video") ||
+      document.querySelector("#movie_player video");
+    if (!video) return;
+    try { video.currentTime = time; } catch (_error) { /* The media element may not be ready. */ }
+  }
+
+  /*
+   * The Info tab is only the description. Title, views and likes stay in
+   * YouTube's own block under the player. The full text comes from the page
+   * JSON when the MAIN-world reader has published it. The DOM copy remains
+   * for the moment before that JSON exists.
    */
   function renderInfoCopy(info, titleNode, descNode) {
     if (!info) return;
     const titleText = nodeText(titleNode);
-    const descText = nodeText(descNode);
-    const metaText = statsLine();
-    const key = titleText + "::" + descText.length + ":" + descText.slice(0, 120) + "::" + metaText;
-    if (info.__infoKey === key && info.querySelector(".tabyt-info-title, .tabyt-info-desc, .tabyt-empty")) return;
+    const meta = metaForCurrentVideo();
+    const fromJson = meta.description;
+    if (!fromJson) revealFullDescription(descNode);
+    const expandedText = fromJson || nodeText(descNode && deepFind(descNode, "#expanded"));
+    const descText = expandedText || nodeText(descNode);
+    const chapterKey = meta.chapters.map((chapter) => chapter.seconds).join(",");
+    const key = (meta.videoId || titleText) + "::" + descText.length + ":" + descText.slice(0, 160) + "::" + chapterKey;
+    if (info.__infoKey === key && info.querySelector(".tabyt-info-desc, .tabyt-empty")) return;
 
     // A new video starts with the description expanded.
     if (info.__infoVideoKey !== titleText) {
@@ -939,40 +1444,23 @@
     info.__infoKey = key;
     info.textContent = "";
 
-    // The title and stats sit in their own column on the right of the description.
-    const infoBody = document.createElement("div");
-    infoBody.className = "tabyt-info-body";
-    const descColumn = document.createElement("div");
-    descColumn.className = "tabyt-info-desc-column";
     const descBody = document.createElement("div");
     descBody.className = "tabyt-info-desc";
-    if (descNode) {
-      addDescriptionToggle(info, descBody, descNode, titleText);
+    if (fromJson || meta.chapters.length) {
+      renderJsonDescription(descBody, fromJson || "", meta.chapters, descNode);
+    } else if (descNode) {
+      mountDomDescription(descBody, descNode);
     }
-    descColumn.appendChild(descBody);
-    const side = document.createElement("div");
-    side.className = "tabyt-info-side";
-    if (titleText) {
-      const heading = document.createElement("h1");
-      heading.className = "tabyt-info-title";
-      heading.textContent = titleText;
-      side.appendChild(heading);
+    if (!descBody.querySelector(".tabyt-info-structured")) {
+      appendDescriptionImages(descBody, descNode);
     }
-    if (metaText) {
-      const meta = document.createElement("p");
-      meta.className = "tabyt-info-meta";
-      meta.textContent = metaText;
-      side.appendChild(meta);
-    }
-    // The title + stats sit on the left of the description.
-    infoBody.appendChild(side);
-    infoBody.appendChild(descColumn);
-    info.appendChild(infoBody);
-    if (!titleText && !descNode) {
+    if (titleText && info) info.__infoVideoKey = info.__infoVideoKey || titleText;
+    info.appendChild(descBody);
+    if (!nodeText(descBody)) {
       const note = document.createElement("p");
       note.className = "tabyt-empty";
-      note.textContent = "Title and description appear here when YouTube finishes loading this video.";
-      infoBody.appendChild(note);
+      note.textContent = "The full description appears here when YouTube finishes loading this video.";
+      descBody.appendChild(note);
     }
   }
 
@@ -1006,7 +1494,11 @@
     tabbar.appendChild(makeTab("info", "Info", true));
     tabbar.appendChild(makeTab("comments", "Comments", false));
     tabbar.appendChild(makeTab("live", "Live", false));
-    tabbar.appendChild(makeTab("other", "Other videos", false));
+    tabbar.appendChild(makeTab("other", "Other", false));
+    const indicator = document.createElement("span");
+    indicator.className = "tabyt-tab-indicator";
+    indicator.setAttribute("aria-hidden", "true");
+    tabbar.appendChild(indicator);
     tabbar.appendChild(makeTab("related", "Related", false));
 
     const panels = document.createElement("div");
@@ -1020,6 +1512,12 @@
     rail.appendChild(tabbar);
     rail.appendChild(panels);
     rail.addEventListener("click", (event) => {
+      const chapter = event.target.closest("[data-seconds]");
+      if (chapter && rail.contains(chapter)) {
+        event.preventDefault();
+        seekVideo(chapter.getAttribute("data-seconds"));
+        return;
+      }
       const related = event.target.closest(".tabyt-related-item");
       if (related) {
         event.preventDefault();
@@ -1054,7 +1552,7 @@
     if (!match) return;
 
     const before = activePanel(rail);
-    if (before) panelScroll.set(before.getAttribute("data-panel"), before.scrollTop);
+    if (before) panelScroll.set(before.getAttribute("data-panel"), panelScrollTop(before));
 
     activeTab = match.getAttribute("data-tab");
     buttons.forEach((button) => {
@@ -1070,8 +1568,21 @@
     });
 
     const after = rail.querySelector('.tabyt-panel[data-panel="' + activeTab + '"]');
-    if (after) after.scrollTop = panelScroll.get(activeTab) || 0;
+    if (after) setPanelScrollTop(after, panelScroll.get(activeTab) || 0);
+    placeTabIndicator(rail, match);
     if (focus) match.focus();
+  }
+
+  function placeTabIndicator(rail, button) {
+    const bar = rail.querySelector(".tabyt-tabbar");
+    const indicator = bar && bar.querySelector(".tabyt-tab-indicator");
+    if (!bar || !indicator || !button) return;
+    const barRect = bar.getBoundingClientRect();
+    const rect = button.getBoundingClientRect();
+    const inset = Math.min(28, Math.max(14, Math.round(rect.width * 0.22)));
+    const width = Math.max(20, rect.width - inset * 2);
+    indicator.style.width = width + "px";
+    indicator.style.transform = "translateX(" + Math.round(rect.left - barRect.left + inset) + "px)";
   }
 
   function onTabKey(event) {
@@ -1097,7 +1608,7 @@
     const primary = root && root.querySelector("#primary");
     if (primary) primary.scrollTop = 0;
     document.querySelectorAll(".tabyt-panel").forEach((panel) => {
-      panel.scrollTop = 0;
+      setPanelScrollTop(panel, 0);
     });
   }
 
@@ -1251,6 +1762,143 @@
     else container.appendChild(list);
   }
 
+  /*
+   * YouTube pins the count inside a short header, so it paints over the first
+   * comment. Split the tab into a fixed compose zone (count, sort, composer)
+   * and a feed zone (everyone else's threads) that alone scrolls. Ambient mode
+   * background-free so the glow shows through; non-ambient may still paint an
+   * opaque compose fill in CSS to avoid scroll smear.
+   */
+  function dedupeCommentDock(dock) {
+    if (!dock) return;
+    ["#title", "#simple-box"].forEach((selector) => {
+      const nodes = dock.querySelectorAll(":scope > " + selector);
+      for (let i = nodes.length - 1; i > 0; i -= 1) nodes[i].remove();
+    });
+    const title = dock.querySelector(":scope > #title");
+    const box = dock.querySelector(":scope > #simple-box");
+    if (title && box && title.nextElementSibling !== box) dock.insertBefore(title, box);
+  }
+
+  let commentFeedScrolling = false;
+  let commentFeedScrollTimer = 0;
+
+  function commentFeedZone(panel) {
+    if (!panel) return null;
+    return panel.querySelector(":scope > .tabyt-comment-feed-zone");
+  }
+
+  function panelScrollTop(panel) {
+    if (!panel) return 0;
+    const feed = commentFeedZone(panel);
+    return feed ? feed.scrollTop : panel.scrollTop;
+  }
+
+  function setPanelScrollTop(panel, value) {
+    if (!panel) return;
+    const feed = commentFeedZone(panel);
+    if (feed) feed.scrollTop = value;
+    else panel.scrollTop = value;
+  }
+
+  function ensureCommentFeedScrollWatch() {
+    const feed = document.querySelector("#tabyt-rail .tabyt-comment-feed-zone");
+    if (!feed || feed.dataset.tabytScrollWatch === "1") return;
+    feed.dataset.tabytScrollWatch = "1";
+    feed.addEventListener(
+      "scroll",
+      () => {
+        commentFeedScrolling = true;
+        clearTimeout(commentFeedScrollTimer);
+        commentFeedScrollTimer = setTimeout(() => {
+          commentFeedScrolling = false;
+        }, 200);
+      },
+      { passive: true }
+    );
+  }
+
+  function commentDockNode(panel) {
+    return (
+      panel.querySelector(":scope > .tabyt-comment-compose-zone > .tabyt-comment-dock") ||
+      panel.querySelector(":scope > .tabyt-comment-dock")
+    );
+  }
+
+  function mountCommentFeedZone(panel, root) {
+    if (!panel || !root) return;
+    let feed = panel.querySelector(":scope > .tabyt-comment-feed-zone");
+    if (!feed) {
+      feed = document.createElement("div");
+      feed.className = "tabyt-comment-feed-zone";
+      panel.appendChild(feed);
+    }
+    if (root.parentElement !== feed) feed.appendChild(root);
+    if (feed.previousElementSibling !== panel.querySelector(":scope > .tabyt-comment-compose-zone")) {
+      const compose = panel.querySelector(":scope > .tabyt-comment-compose-zone");
+      if (compose) panel.insertBefore(compose, feed);
+    }
+  }
+
+  function mountCommentDock(panel) {
+    if (!panel) return;
+    const root =
+      panel.querySelector(":scope > .tabyt-comment-feed-zone > ytd-comments#comments") ||
+      panel.querySelector("ytd-comments#comments");
+    const header = root && root.querySelector("ytd-comments-header-renderer");
+    if (!header) return;
+    const box = header.querySelector(":scope > #simple-box");
+    const title = header.querySelector(":scope > #title");
+    panel.classList.add("tabyt-comments-panel");
+    let compose = panel.querySelector(":scope > .tabyt-comment-compose-zone");
+    if (!compose) {
+      compose = document.createElement("div");
+      compose.className = "tabyt-comment-compose-zone";
+      panel.insertBefore(compose, panel.firstChild);
+    }
+    let dock = compose.querySelector(":scope > .tabyt-comment-dock");
+    if (!dock) {
+      dock = document.createElement("div");
+      dock.className = "tabyt-comment-dock";
+      compose.appendChild(dock);
+    }
+    if (compose.parentElement !== panel || compose !== panel.firstElementChild) {
+      panel.insertBefore(compose, panel.firstChild);
+    }
+    if (title && title.parentElement !== dock) dock.appendChild(title);
+    if (box && box.parentElement !== dock) dock.appendChild(box);
+    dedupeCommentDock(dock);
+    if (!dock.querySelector(":scope > #title") && !dock.querySelector(":scope > #simple-box")) return;
+    mountCommentFeedZone(panel, root);
+    ensureCommentFeedScrollWatch();
+  }
+
+  function restoreCommentDock(panel) {
+    if (!panel) return;
+    panel.classList.remove("tabyt-comments-panel");
+    const feed = panel.querySelector(":scope > .tabyt-comment-feed-zone");
+    const root =
+      (feed && feed.querySelector("ytd-comments#comments")) ||
+      panel.querySelector("ytd-comments#comments");
+    if (feed && root && root.parentElement === feed) panel.appendChild(root);
+    const dock = commentDockNode(panel);
+    if (!dock) {
+      feed?.remove();
+      panel.querySelector(":scope > .tabyt-comment-compose-zone")?.remove();
+      return;
+    }
+    const header = root && root.querySelector("ytd-comments-header-renderer");
+    if (header) {
+      const title = dock.querySelector(":scope > #title");
+      const box = dock.querySelector(":scope > #simple-box");
+      if (title) header.insertBefore(title, header.firstChild);
+      if (box) header.appendChild(box);
+    }
+    dock.remove();
+    panel.querySelector(":scope > .tabyt-comment-compose-zone")?.remove();
+    feed?.remove();
+  }
+
   function applyTabs(rail) {
     const currentId = videoId();
     const info = rail.querySelector('[data-panel="info"]');
@@ -1278,42 +1926,66 @@
     ]);
 
     /*
-     * A live stream swaps comments for live chat: the Comments tab is hidden
-     * and the Live tab carries YouTube's own chat frame. Regular videos keep
-     * the Comments tab exactly as before.
+     * Comments and live chat share one tab. The setting chooses which list
+     * is shown. The old Live tab stays in the bar hidden.
      */
-    const liveStream = isLiveVideo();
-    const showComments = !!settings.layoutComments && !liveStream;
-    const showLive = !!settings.layoutLive && (liveStream || (!!settings.layoutChat && !!chatNode));
-    document.documentElement.classList.toggle("tabyt-live-stream", liveStream);
+    const discussion = settings.layoutDiscussion === "live" ? "live" : "comments";
+    const showDiscussion = !!settings.layoutComments;
+    document.documentElement.classList.toggle("tabyt-live-stream", isLiveVideo());
 
     setTabVisible(rail, "info", settings.layoutInfo);
-    setTabVisible(rail, "comments", showComments);
-    setTabVisible(rail, "live", showLive);
+    setTabVisible(rail, "comments", showDiscussion);
+    setTabVisible(rail, "live", false);
     setTabVisible(rail, "other", settings.layoutOther);
     setTabVisible(rail, "related", settings.layoutRelated);
+    const discussionTab = rail.querySelector('[data-tab="comments"]');
+    if (discussionTab) discussionTab.textContent = discussion === "live" ? "Live" : "Comments";
+    if (comments) comments.classList.toggle("tabyt-discussion-live", showDiscussion && discussion === "live");
 
     /*
-     * Do not move YouTube's title/description nodes into the rail: YouTube's
-     * own rendering keeps re-inserting them into #primary, which made them
-     * twitch between the two sides. Instead render a stable copy in the rail
-     * and hide the originals with CSS while the Info tab is on.
+     * Leave the title, channel, views and likes in #primary, under the player.
+     * Copy only the description into the Info tab. Moving the live nodes made
+     * them jump back into #primary whenever YouTube re-rendered.
      */
     document.documentElement.classList.toggle("tabyt-rail-info", !!settings.layoutInfo);
     if (settings.layoutInfo) {
       unslot(info, "title");
       unslot(info, "description");
       renderInfoCopy(info, title, description);
+      renderSkips(info);
     } else {
       info.__infoKey = "";
       info.textContent = "";
     }
+    paintSkipMarks();
 
-    if (showComments) {
-      slot(commentNode, comments, "comments");
-      emptyNote(comments, commentNode ? "" : "Comments appear here when this video has them.");
-    } else {
+    unslot(live, "chat");
+    if (showDiscussion && discussion === "live") {
+      restoreCommentDock(comments);
       unslot(comments, "comments");
+      if (chatNode) {
+        slot(chatNode, comments, "chat");
+        emptyNote(comments, "");
+      } else {
+        unslot(comments, "chat");
+        emptyNote(comments, "Live chat appears here when YouTube loads it.");
+      }
+    } else if (showDiscussion) {
+      unslot(comments, "chat");
+      if (commentNode) {
+        slot(commentNode, comments, "comments");
+        mountCommentDock(comments);
+        if (window.TabYTAuthors) window.TabYTAuthors.scan(comments);
+        emptyNote(comments, "");
+      } else {
+        restoreCommentDock(comments);
+        unslot(comments, "comments");
+        emptyNote(comments, "Comments appear here when this video has them.");
+      }
+    } else {
+      restoreCommentDock(comments);
+      unslot(comments, "comments");
+      unslot(comments, "chat");
     }
 
     if (settings.layoutOther) {
@@ -1330,23 +2002,26 @@
       relatedKey = "";
     }
 
-    if (showLive && settings.layoutChat && chatNode) {
-      slot(chatNode, live, "chat");
-      emptyNote(live, "");
-    } else {
-      unslot(live, "chat");
-      emptyNote(live, showLive
-        ? "Live chat appears here when YouTube loads it."
-        : "Live chat appears here when this video is a live stream.");
-    }
-
     showTab(activeTab);
+  }
+
+  function mutationMatters(records) {
+    for (let i = 0; i < records.length; i += 1) {
+      const target = records[i].target;
+      const el = target && target.nodeType === 1 ? target : target && target.parentElement;
+      if (!el || typeof el.closest !== "function") return true;
+      if (el.closest("#player, #movie_player")) continue;
+      if (el.closest("#tabyt-rail") && !el.closest("#related, ytd-watch-next-secondary-results-renderer")) continue;
+      return true;
+    }
+    return false;
   }
 
   function sync() {
     if (quiet) return;
     quiet = true;
     try {
+      pageMeta = readPageMeta();
       if (!settings.layoutEnabled || !onWatchPage() || !watchRoot()) {
         restoreAll();
         /*
@@ -1371,19 +2046,21 @@
       const mastheadHeight = masthead ? Math.round(masthead.getBoundingClientRect().height) : 0;
       document.documentElement.style.setProperty("--tabyt-masthead", (mastheadHeight || 56) + "px");
       document.documentElement.classList.add("tabyt-layout-on");
+      applyGlassTier();
       ensureDivider(column);
       applyTabs(ensureRail(host));
-      if (document.getElementById("tabyt-rail")) booted = true;
       /*
-       * Animated entry: the rail shell (tab bar, panels, related list) is in
-       * place immediately; applyTabs fills the panels and the info copy slides
-       * in over ~400ms so YouTube's native layout never appears.
+       * One short entry shift per page load. Restarting it on every sync kept
+       * the class on forever, because YouTube never stops mutating the page.
        */
-      document.documentElement.classList.add("tabyt-entering");
-      clearTimeout(enterTimer);
-      enterTimer = setTimeout(() => {
-        document.documentElement.classList.remove("tabyt-entering");
-      }, 1200);
+      if (!booted) {
+        document.documentElement.classList.add("tabyt-entering");
+        clearTimeout(enterTimer);
+        enterTimer = setTimeout(() => {
+          document.documentElement.classList.remove("tabyt-entering");
+        }, 400);
+      }
+      if (document.getElementById("tabyt-rail")) booted = true;
       ensureAmbient();
       syncGlow();
       observePrimary();
@@ -1407,14 +2084,32 @@
     // YouTube navigation, so the native watch page never renders first. Once
     // booted, add a tiny delay so bursts of mutations from a busy watch page
     // coalesce into one sync instead of queueing a chain of syncs.
-    timer = setTimeout(sync, (booted && Date.now() > fastUntil) ? 30 : 0);
+    timer = setTimeout(sync, (booted && Date.now() > fastUntil) ? 150 : 0);
   }
 
   function start() {
-    const observer = new MutationObserver(schedule);
-    observer.observe(document.documentElement, { childList: true, subtree: true });
-    document.addEventListener("yt-navigate-start", () => { fastUntil = Date.now() + 3000; });
+    const observer = new MutationObserver((records) => {
+      if (!mutationMatters(records)) return;
+      schedule();
+    });
+    /*
+     * Child changes still discover comments and related videos as YouTube
+     * inserts them. Player, chat and comment mutations are ignored. Fit uses
+     * the ResizeObserver on #primary and #below, not this observer.
+     * data-tabyt-meta is the only attribute that schedules a sync.
+     */
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-tabyt-meta", "data-tabyt-skips"]
+    });
+    document.addEventListener("yt-navigate-start", () => {
+      fastUntil = Date.now() + 3000;
+      pageMeta = emptyMeta();
+    });
     document.addEventListener("yt-navigate-finish", () => {
+      activeTab = preferredTab();
       fastUntil = Date.now() + 3000;
       relatedKey = "";
       lastTargetW = 0;
@@ -1427,7 +2122,17 @@
     window.addEventListener("resize", schedule);
 
     /* Re-inject the ambient canvas if YouTube replaces the player on reload. */
-    injectionTimer = setInterval(reinjectAmbient, 1000);
+    injectionTimer = setInterval(() => {
+      reinjectAmbient();
+      paintSkipMarks();
+      const panel = document.querySelector('#tabyt-rail [data-panel="comments"]');
+      if (panel && !panel.classList.contains("tabyt-discussion-live")) {
+        if (!commentFeedScrolling) {
+          mountCommentDock(panel);
+          if (window.TabYTAuthors) window.TabYTAuthors.scan(panel);
+        }
+      }
+    }, 1000);
     if (window.TabYTPlayer && window.TabYTPlayer.on) {
       window.TabYTPlayer.on("ready", reinjectAmbient);
     }

@@ -1439,6 +1439,41 @@ body {
   max-width: 620px;
 }
 
+.setting-group {
+  margin: 8px 0;
+  padding: 2px 0 6px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.setting-group > .switch {
+  border-top: 0;
+}
+
+.setting-nested {
+  margin-left: 50px;
+}
+
+.setting-choice {
+  display: flex;
+  gap: 16px;
+  padding: 4px 0 10px;
+}
+
+.setting-choice .choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.setting-group .range {
+  width: 100%;
+  margin: 4px 0 8px;
+  accent-color: var(--accent, #3ea6ff);
+}
+
 .settings-body {
   padding: 6px 18px 18px;
 }

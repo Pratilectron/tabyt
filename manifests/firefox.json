@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "TabYT — YouTube Tab Memory Manager",
   "short_name": "TabYT",
-  "version": "1.0.23",
+  "version": "1.0.56",
   "description": "See YouTube tab memory, save playback positions, close tabs in one click, auto-close idle videos, and keep a local memory history.",
   "browser_specific_settings": {
     "gecko": {
@@ -24,7 +24,8 @@
     "*://www.youtube.com/*",
     "*://m.youtube.com/*",
     "*://music.youtube.com/*",
-    "*://youtube.com/*"
+    "*://youtube.com/*",
+    "https://sponsor.ajay.app/*"
   ],
   "background": {
     "scripts": [
@@ -57,15 +58,31 @@
       "js": [
         "lib/core.js",
         "content.js",
-        "vendor/video-ambient-glow.js",
         "player.js",
-        "layout.js"
+        "authors.js",
+        "layout.js",
+        "sponsor.js"
       ],
       "css": [
         "layout.css"
       ],
       "run_at": "document_start",
       "all_frames": false
+    },
+    {
+      "matches": [
+        "*://www.youtube.com/*",
+        "*://m.youtube.com/*",
+        "*://music.youtube.com/*",
+        "*://youtube.com/*"
+      ],
+      "js": [
+        "lib/core.js",
+        "page-data.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false,
+      "world": "MAIN"
     }
   ],
   "icons": {

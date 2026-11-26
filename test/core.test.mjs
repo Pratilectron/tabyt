@@ -19,6 +19,29 @@ test("normalizeSettings returns defaults and clamps numbers", () => {
   assert.equal(defaults.layoutOther, true);
   assert.equal(defaults.layoutRelated, true);
   assert.equal(defaults.layoutAmbient, true);
+  assert.equal(defaults.layoutSkips, true);
+  assert.equal(defaults.rememberLayoutSize, true);
+  assert.equal(defaults.layoutSide, 420);
+  assert.equal(defaults.layoutRadius, 16);
+  assert.equal(defaults.layoutMotion, true);
+  assert.equal(defaults.layoutStartTab, "info");
+  assert.equal(defaults.layoutDiscussion, "comments");
+  const shaped = core.normalizeSettings({ layoutSide: 900, layoutRadius: -4, layoutStartTab: "nope", layoutDiscussion: "nope" });
+  assert.equal(shaped.layoutSide, 680);
+  assert.equal(shaped.layoutRadius, 0);
+  assert.equal(shaped.layoutStartTab, "info");
+  assert.equal(shaped.layoutDiscussion, "comments");
+  const channel = core.parseChannelStats([
+    '"channelMetadataRenderer":{"title":"Top5s"}',
+    '"subscriberCountText":{"accessibility":{"accessibilityData":{"label":"1.49 thousand subscribers"}}',
+    '"videoCountText":{"runs":[{"text":"21"'
+  ].join(""));
+  assert.deepEqual(channel, { name: "Top5s", subs: "1.49K", videos: "21" });
+  const header = core.parseChannelStats([
+    '"pageHeaderViewModel":{"title":{"dynamicTextViewModel":{"text":{"content":"Top5s"',
+    '"metadataRows":[{"metadataParts":[{"text":{"content":"@Top5s"}}]},{"metadataParts":[{"text":{"content":"46.8M subscribers"}},{"text":{"content":"1.7K videos"}}]}]'
+  ].join(""));
+  assert.deepEqual(header, { name: "Top5s", subs: "46.8M", videos: "1.7K" });
   assert.equal(defaults.inactivityMinutes, 30);
   assert.equal(defaults.maxSavedVideos, 300);
 
@@ -308,12 +331,13 @@ test("player settings defaults and resizing cleanup", () => {
   assert.equal(defaults.customControls, true);
 
   const layout = readFileSync(join(root, "src", "layout.js"), "utf8");
-  const offBranch = layout.slice(
-    layout.indexOf("if (!settings.playerResize)"),
-    layout.indexOf('document.documentElement.classList.add("tabyt-player-resize")')
-  );
-  assert.match(offBranch, /removeProperty\("--ytd-watch-flexy-player-width"\)/);
-  assert.match(offBranch, /removeProperty\("--ytd-watch-flexy-player-height"\)/);
+  const fit = layout.slice(layout.indexOf("function clearPlayerBox()"), layout.indexOf("function observePrimary"));
+  assert.match(fit, /function clearPlayerBox\(\)/);
+  assert.match(fit, /removeProperty\("--ytd-watch-flexy-player-width"\)/);
+  assert.match(fit, /removeProperty\("--ytd-watch-flexy-player-height"\)/);
+  assert.match(fit, /classList\.add\("tabyt-player-fit"\)/);
+  assert.match(fit, /availH/);
+  assert.doesNotMatch(fit, /if \(!settings\.playerResize\)/);
 
   const player = readFileSync(join(root, "src", "player.js"), "utf8");
   assert.match(player, /core\.normalizeSettings\(raw\)/);
@@ -321,14 +345,29 @@ test("player settings defaults and resizing cleanup", () => {
 
 test("ambient background layers behind a sharp, aspect-preserving video", () => {
   const css = readFileSync(join(root, "src", "layout.css"), "utf8");
+  assert.match(css, /#tabyt-ambient\s*\{[^}]*position:\s*fixed\s*!important/s);
   assert.match(css, /#tabyt-ambient\s*\{[^}]*z-index:\s*0\s*!important/s);
   assert.match(css, /#tabyt-ambient canvas\s*\{[^}]*object-fit:\s*cover\s*!important/s);
-  assert.match(css, /#tabyt-ambient canvas\s*\{[^}]*filter:\s*blur\([^)]*\)[^;]*!important/s);
-  /* The canvas is invisible unless YouTube's opaque boxes are made transparent. */
-  assert.match(css, /#player:has\(#tabyt-ambient\)[^}]*background:\s*transparent\s*!important/s);
-  assert.match(css, /#player:has\(#tabyt-ambient\) video\.html5-main-video\s*\{[^}]*object-fit:\s*contain\s*!important/s);
+  assert.match(css, /#tabyt-ambient canvas\s*\{[^}]*filter:\s*none\s*!important/s);
+  /* The page glow is invisible unless YouTube's opaque boxes are made transparent. */
+  assert.match(css, /tabyt-ambient ytd-watch-flexy #player[^}]*background:\s*transparent\s*!important/s);
+  assert.match(css, /tabyt-ambient ytd-watch-flexy #player video\.html5-main-video\s*\{[^}]*object-fit:\s*contain\s*!important/s);
+  assert.match(css, /img,\s*\nhtml\.tabyt-layout-on\.tabyt-ambient ytd-thumbnail/);
+  assert.match(css, /-webkit-mask-image:\s*radial-gradient/);
+  assert.match(css, /border-radius:\s*var\(--tabyt-player-radius, 16px\)\s*!important/);
+  assert.doesNotMatch(css, /rgba\(15,\s*15,\s*15,\s*0\.78\)/);
 
   const layout = readFileSync(join(root, "src", "layout.js"), "utf8");
+  assert.match(layout, /function persistSide\(px\)/);
+  assert.match(layout, /rememberLayoutSize/);
+  assert.match(css, /engagement-panel-comments-section/);
+  assert.match(layout, /ytd-comments#comments/);
+  assert.match(layout, /function mountCommentDock\(panel\)/);
+  assert.doesNotMatch(layout, /slot\(engagement/);
+  assert.match(layout, /ytp-time-display\.ytp-live \.ytp-live-badge/);
+  assert.match(layout, /layoutDiscussion === "live"/);
+  assert.match(layout, /tabyt-chapter-thumb/);
+  assert.match(layout, /function placeAmbientOrigin\(\)/);
   assert.match(layout, /syncGlow\(\);/);
   assert.match(layout, /placeGlowCanvas\(\)/);
 });
@@ -385,7 +424,7 @@ test("injection survives video replacement and avoids duplicates", () => {
   const layout = readFileSync(join(root, "src", "layout.js"), "utf8");
   assert.match(layout, /function ambientHealthy\(\)/);
   assert.match(layout, /function reinjectAmbient\(\)/);
-  assert.match(layout, /setInterval\(reinjectAmbient, 1000\)/);
+  assert.match(layout, /setInterval\(\(\) => \{\s*reinjectAmbient\(\);\s*paintSkipMarks\(\);[\s\S]*?\}, 1000\)/);
   assert.match(layout, /TabYTPlayer\.on\("ready", reinjectAmbient\)/);
 });
 
@@ -401,19 +440,167 @@ test("description more button works in the copied info panel", () => {
   assert.match(layout, /clone\.tagName === "YTD-TEXT-INLINE-EXPANDER"/);
   assert.match(layout, /function deepFind\(root, selector\)/);
   assert.match(layout, /function descriptionContent\(descNode\)/);
+  assert.match(layout, /function revealFullDescription\(descNode\)/);
+  assert.match(layout, /expand\.click\(\)/);
   assert.match(layout, /deepFind\(descNode, "#expanded"\)/);
   assert.match(layout, /deepFind\(descNode, "#collapsed"\)/);
-  /* The copy prefers the longest description source, so "more" reveals the full text. */
-  assert.match(layout, /let source = descNode;/);
-  assert.match(layout, /let node = descNode\.parentElement;/);
-  assert.match(layout, /text\.length > nodeText\(source\)\.length/);
-  assert.match(layout, /clone\.classList\.add\("tabyt-desc-text"\)/);
-  assert.match(layout, /function statsLine\(\)/);
-  assert.match(layout, /tabyt-info-meta/);
+  /* The copy stays inside the description. Ancestors include the title and views. */
+  assert.doesNotMatch(layout, /let node = descNode\.parentElement/);
+  assert.doesNotMatch(layout, /className = "tabyt-info-title"/);
+  assert.doesNotMatch(layout, /function statsLine\(\)/);
+  assert.match(layout, /function mountStructuredCards\(content, descNode, skipBody, skipChapters\)/);
+  assert.match(layout, /function isChapterStructuredNode\(node\)/);
+  assert.match(layout, /function explodeStructuredItem\(item\)/);
+  assert.match(layout, /commentFeedScrolling/);
+  assert.match(layout, /tabyt-info-structured-card/);
+  assert.match(layout, /function mountDomDescription\(body, descNode\)/);
+  assert.match(layout, /The Info tab is only the description/);
 
   const css = readFileSync(join(root, "src", "layout.css"), "utf8");
+  assert.doesNotMatch(css, /tabyt-info-structured ytd-video-description-infocards-section-renderer \.style-scope/);
   assert.match(css, /\.tabyt-desc-content\s*\{[^}]*max-height: none/s);
-  assert.match(css, /\.tabyt-info-meta\s*\{/);
+  assert.match(css, /#description-inline-expander\s*\{[^}]*display:\s*none\s*!important/s);
+  assert.doesNotMatch(css, /tabyt-rail-info[^\{]*#title\s*,/);
+  assert.match(css, /#primary\s*\{[^}]*order:\s*0/s);
+  assert.match(css, /#secondary\s*\{[^}]*order:\s*2/s);
+  assert.doesNotMatch(css, /#secondary\s*\{[^}]*order:\s*-1/s);
+});
+
+test("watch JSON supplies the description and clickable chapters", () => {
+  const meta = core.extractWatchMeta({
+    videoDetails: { videoId: "abc12345678", shortDescription: "Full text\n0:12 Intro" },
+    engagementPanels: [{
+      engagementPanelSectionListRenderer: {
+        panelIdentifier: "engagement-panel-macro-markers-description-chapters",
+        content: {
+          macroMarkersListRenderer: {
+            contents: [
+              { macroMarkersListItemRenderer: { title: { simpleText: "Later" }, onTap: { watchEndpoint: { startTimeSeconds: 90 } }, thumbnail: { thumbnails: [{ url: "https://i.ytimg.com/vi/abc/hqdefault.jpg", width: 168 }, { url: "https://i.ytimg.com/vi/abc/hqdefault_2.jpg", width: 336 }] } } },
+              { macroMarkersListItemRenderer: { title: { simpleText: "Intro" }, onTap: { watchEndpoint: { startTimeSeconds: 0 } }, thumbnail: { thumbnails: [{ url: "javascript:alert(1)", width: 999 }] } } }
+            ]
+          }
+        }
+      }
+    }]
+  }, null);
+  assert.equal(meta.videoId, "abc12345678");
+  assert.equal(meta.description, "Full text\n0:12 Intro");
+  assert.deepEqual(meta.chapters, [
+    { title: "Intro", seconds: 0, image: "" },
+    { title: "Later", seconds: 90, image: "https://i.ytimg.com/vi/abc/hqdefault_2.jpg" }
+  ]);
+
+  const fromMarkers = core.extractWatchMeta({
+    videoDetails: { videoId: "xyz98765432", shortDescription: "" },
+    playerOverlays: {
+      playerOverlayRenderer: {
+        decoratedPlayerBarRenderer: {
+          decoratedPlayerBarRenderer: {
+            playerBar: {
+              multiMarkersPlayerBarRenderer: {
+                markersMap: [{
+                  value: {
+                    chapters: [{ chapterRenderer: { title: { simpleText: "Start" }, timeRangeStartMillis: 1500 } }]
+                  }
+                }]
+              }
+            }
+          }
+        }
+      }
+    }
+  }, {});
+  assert.deepEqual(fromMarkers.chapters, [{ title: "Start", seconds: 2, image: "" }]);
+
+  const layout = readFileSync(join(root, "src", "layout.js"), "utf8");
+  assert.match(layout, /function renderJsonDescription\(body, text, chapters\)/);
+  assert.match(layout, /function seekVideo\(seconds\)/);
+  assert.match(layout, /video\.currentTime = time/);
+  assert.match(layout, /closest\("\[data-seconds\]"\)/);
+  assert.match(layout, /data-tabyt-meta/);
+
+  const page = readFileSync(join(root, "src", "page-data.js"), "utf8");
+  assert.match(page, /extractWatchMeta/);
+  assert.match(page, /ytInitialPlayerResponse/);
+  assert.match(page, /setAttribute\("data-tabyt-meta"/);
+  assert.doesNotMatch(page, /fetch\s*\(/);
+
+  for (const name of ["chrome", "firefox"]) {
+    const manifest = JSON.parse(readFileSync(join(root, "manifests", name + ".json"), "utf8"));
+    const main = manifest.content_scripts.find((entry) => entry.world === "MAIN");
+    assert.ok(main);
+    assert.equal(main.run_at, "document_start");
+    assert.ok(main.js.includes("page-data.js"));
+    assert.equal(main.all_frames, false);
+  }
+});
+
+test("skip segments are shown from SponsorBlock without copying its code", () => {
+  const sponsor = readFileSync(join(root, "src", "sponsor.js"), "utf8");
+  assert.match(sponsor, /https:\/\/sponsor\.ajay\.app\/api\/skipSegments\//);
+  assert.match(sponsor, /crypto\.subtle\.digest\("SHA-256"/);
+  assert.match(sponsor, /slice\(0, 4\)/);
+  assert.match(sponsor, /actionType !== "skip"/);
+  assert.doesNotMatch(sponsor, /XMLHttpRequest/);
+
+  const layout = readFileSync(join(root, "src", "layout.js"), "utf8");
+  assert.match(layout, /function renderSkips\(info\)/);
+  assert.match(layout, /function paintSkipMarks\(\)/);
+  assert.match(layout, /data-tabyt-skips/);
+  assert.match(layout, /Skipped by /);
+
+  const css = readFileSync(join(root, "src", "layout.css"), "utf8");
+  assert.match(css, /\.tabyt-skip-mark\s*\{[^}]*background:\s*#00d400/s);
+});
+
+test("comment author pill shows the name, subscriber count, and video count", () => {
+  const authors = readFileSync(join(root, "src", "authors.js"), "utf8");
+  assert.match(authors, /className = "tabyt-author-meta"/);
+  assert.match(authors, /stat\(subs, "subs"\)/);
+  assert.match(authors, /stat\(videos, "videos"\)/);
+  assert.match(authors, /className = "tabyt-author-sep"/);
+  assert.match(authors, /sep\.textContent = "\|"/);
+  assert.match(authors, /tabyt-author-ready/);
+  const layout = readFileSync(join(root, "src", "layout.js"), "utf8");
+  assert.match(layout, /tabyt-comments-panel/);
+  assert.match(layout, /function dedupeCommentDock\(dock\)/);
+  assert.match(layout, /tabyt-comment-compose-zone/);
+  assert.match(layout, /tabyt-comment-feed-zone/);
+  const css = readFileSync(join(root, "src", "layout.css"), "utf8");
+  assert.match(css, /\.tabyt-panel\.tabyt-comments-panel[^}]*overflow:\s*hidden/s);
+  assert.match(css, /\.tabyt-comment-feed-zone[^}]*overflow-y:\s*auto/s);
+  assert.doesNotMatch(css, /\.tabyt-comment-compose-zone[^}]*position:\s*sticky/s);
+  assert.match(css, /ytd-comment-thread-renderer/);
+  assert.match(css, /ytd-comments#comments ytd-comments-header-renderer/);
+  assert.doesNotMatch(css, /ytd-comments#comments #header\s*\{[^}]*display:\s*none/s);
+});
+
+test("glow draws frames and does not read pixels", () => {
+  const layout = readFileSync(join(root, "src", "layout.js"), "utf8");
+  assert.match(layout, /function createFrameGlow\(video\)/);
+  assert.match(layout, /requestVideoFrameCallback/);
+  assert.match(layout, /src\.drawImage\(video/);
+  assert.match(layout, /ctx\.drawImage\(scratch/);
+  assert.match(layout, /document\.hidden \|\| video\.paused/);
+  assert.match(layout, /src\.filter = "blur\(5px\) saturate\(1\.35\) brightness\(0\.8\)"/);
+  assert.match(layout, /ctx\.filter = "blur\(8px\)"/);
+  assert.match(layout, /sampleMs = 125/);
+  assert.doesNotMatch(layout, /getImageData/);
+  assert.doesNotMatch(layout, /VideoAmbientGlow/);
+  const css = readFileSync(join(root, "src", "layout.css"), "utf8");
+  assert.match(css, /#tabyt-ambient canvas\s*\{[^}]*filter:\s*none\s*!important/s);
+});
+
+test("hidden tabs skip layout and the document observer ignores the player", () => {
+  const css = readFileSync(join(root, "src", "layout.css"), "utf8");
+  assert.match(css, /\.tabyt-panel:not\(\.is-active\)\s*\{[^}]*content-visibility:\s*hidden/s);
+  assert.match(css, /contain-intrinsic-size:\s*auto 480px/);
+  const layout = readFileSync(join(root, "src", "layout.js"), "utf8");
+  assert.match(layout, /function mutationMatters\(records\)/);
+  assert.match(layout, /#player, #movie_player/);
+  assert.match(layout, /attributeFilter:\s*\["data-tabyt-meta", "data-tabyt-skips"\]/);
+  const fit = layout.slice(layout.indexOf("function observePrimary"));
+  assert.match(fit, /new ResizeObserver\(\(\) => fitPlayer\(\)\)/);
 });
 
 test("description copy appends the native chapters section", () => {
@@ -482,14 +669,17 @@ test("watch-page design is native and transitions are smooth", () => {
   assert.match(rail, /background:\s*transparent/);
   assert.match(rail, /border-left:\s*0\b/);
 
-  /* Smooth motion: YouTube's own curve (cubic-bezier(0.05, 0, 0, 1)) and a 200 ms transition on tabs. */
-  assert.match(css, /--tabyt-ease:\s*cubic-bezier\(0\.05, 0, 0, 1\)/);
-  assert.match(css, /--tabyt-transition:\s*200ms var\(--tabyt-ease\)/);
+  /* Long ease-out on tabs and the rest of the watch page. */
+  assert.match(css, /--tabyt-ease:\s*cubic-bezier\(0\.22, 1, 0\.36, 1\)/);
+  assert.match(css, /--tabyt-transition:\s*520ms var\(--tabyt-ease\)/);
   assert.match(css, /#tabyt-rail \.tabyt-tab\s*\{[^}]*transition: color var\(--tabyt-transition\)[^}]*transform/s);
+  assert.match(css, /@keyframes tabyt-panel-in/);
+  assert.match(layout, /function placeTabIndicator\(rail, button\)/);
 
-  /* fitPlayer bails out when the size is unchanged before gathering nodes. */
+  /* fitPlayer bails out when the size is unchanged before writing CSS variables. */
   const fit = layout.slice(layout.indexOf("function fitPlayer()"));
   const unchanged = fit.indexOf("if (lastTargetW === targetW && lastTargetH === targetH)");
-  const gather = fit.indexOf("overflowTargets.forEach((node) => setImp(node, \"overflow\", \"visible\"))");
-  assert.ok(unchanged !== -1 && gather > unchanged);
+  const write = fit.indexOf('setProperty("--tabyt-player-width"');
+  assert.ok(unchanged !== -1 && write > unchanged);
+  assert.doesNotMatch(fit, /gatherOverflowNodes|overflowTargets/);
 });

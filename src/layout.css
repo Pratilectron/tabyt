@@ -24,15 +24,24 @@ html.tabyt-layout-on {
   /* TabYT-specific: native palette, elevations and motion */
   --tabyt-masthead:  56px;
   --tabyt-radius:    8px;
+  --tabyt-player-radius: 16px;
   --tabyt-glass:     rgba(255,255,255,0.03);
   --tabyt-glass-border: rgba(255,255,255,0.06);
+  --tabyt-glass-blur: 6px;
+  --tabyt-glass-saturate: 1.06;
+  --tabyt-glass-fallback: color-mix(in srgb, var(--tabyt-bg) 70%, transparent);
+  --tabyt-dock-bg: color-mix(in srgb, var(--tabyt-bg) 96%, transparent);
+  --tabyt-surface-glass: color-mix(in srgb, var(--tabyt-glass-fallback) 40%, var(--tabyt-glass));
+  --tabyt-pill-bg: color-mix(in srgb, var(--tabyt-bg) 82%, var(--tabyt-muted) 18%);
+  --tabyt-pill-fg: var(--tabyt-text);
+  --tabyt-pill-muted: var(--tabyt-muted);
   --tabyt-accent:    #3ea6ff;
   --tabyt-accent-dim: rgba(62,166,255,0.2);
   --tabyt-shadow:    0 8px 32px rgba(0,0,0,0.5);
   --tabyt-tab-active-line: 2px;
-  /* YouTube's own motion curve (cubic-bezier(0.05, 0, 0, 1) on ytd-watch-flexy). */
-  --tabyt-ease:      cubic-bezier(0.05, 0, 0, 1);
-  --tabyt-transition: 200ms var(--tabyt-ease);
+  /* Long ease-out: motion arrives and settles, it does not snap. */
+  --tabyt-ease:      cubic-bezier(0.22, 1, 0.36, 1);
+  --tabyt-transition: 520ms var(--tabyt-ease);
 }
 
 /* Light-mode overrides */
@@ -44,7 +53,24 @@ html.tabyt-layout-on:not([dark]) {
   --tabyt-line:      var(--yt-spec-10-percent-layer, rgba(0,0,0,0.1));
   --tabyt-glass:     rgba(0,0,0,0.02);
   --tabyt-glass-border: rgba(0,0,0,0.1);
+  --tabyt-glass-fallback: color-mix(in srgb, var(--tabyt-bg) 78%, transparent);
+  --tabyt-pill-bg: color-mix(in srgb, var(--tabyt-bg) 94%, var(--tabyt-text) 6%);
+  --tabyt-pill-fg: var(--tabyt-text);
+  --tabyt-pill-muted: var(--tabyt-muted);
   --tabyt-shadow:    0 8px 32px rgba(0,0,0,0.12);
+}
+
+@media (prefers-reduced-motion: reduce), (prefers-reduced-transparency: reduce) {
+  html.tabyt-layout-on {
+    --tabyt-glass-blur: 0px;
+    --tabyt-glass-saturate: 1;
+  }
+}
+
+html.tabyt-layout-on.tabyt-glass-lite,
+html.tabyt-layout-on.tabyt-still {
+  --tabyt-glass-blur: 0px;
+  --tabyt-glass-saturate: 1;
 }
 
 /* ─── Shell: lock viewport to avoid double-scrollbar ─────────────────── */
@@ -96,51 +122,42 @@ html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
 
 html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
   ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #primary {
-  display: block !important;
+  display: flex !important;
+  flex-direction: column !important;
   flex: 1 1 auto !important;
   min-width: 0 !important;
   max-width: calc(100% - var(--tabyt-side, 420px) - 10px) !important;
   height: 100% !important;
-  padding: 10px clamp(0px, 1vw, 20px) 20px !important;
+  padding: 8px 12px !important;
   box-sizing: border-box !important;
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
-  overscroll-behavior: contain !important;
-  scrollbar-gutter: stable !important;
-  scrollbar-width: thin !important;
-  scrollbar-color: var(--tabyt-raised) transparent !important;
-}
-
-html.tabyt-layout-on ytd-watch-flexy #primary::-webkit-scrollbar {
-  width: 6px;
-}
-
-html.tabyt-layout-on ytd-watch-flexy #primary::-webkit-scrollbar-thumb {
-  border-radius: 6px;
-  background: var(--tabyt-raised);
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
 }
 
 html.tabyt-layout-on ytd-watch-flexy #primary-inner {
   position: relative;
+  display: flex;
+  flex-direction: column;
   width: 100%;
+  height: 100%;
+  min-height: 0;
   max-width: none;
   margin: 0;
-  overflow: visible;
+  overflow: hidden;
 }
 
 /* ─── Player box: definite height so metadata flows below ────────────── */
 /*
- * ALL player sizing lives behind html.tabyt-player-resize. That class is only
- * added when the "Player resizing" setting is ON. When it is off (the default)
- * not one of these rules applies, so YouTube owns the player completely and
- * the video can never collapse to zero height. The tabs rail still works.
+ * Player sizing is on whenever the watch layout is on, so the video and the
+ * rows under it fit the left column. The drag handle stays behind
+ * html.tabyt-player-resize and is still opt-in.
  *
  * --tabyt-player-height is set by fitPlayer() in layout.js.
  * A definite height is REQUIRED: without it, YouTube's percentage-padding
  * on #player-container-inner adds extra height on top of the box and
  * pushes the control bar over the metadata below.
  */
-html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
   ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #player {
   margin: 0 auto !important;
   width: var(--tabyt-player-width, 100%) !important;
@@ -148,27 +165,29 @@ html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullsc
   min-width: 0 !important;
   min-height: 0 !important;
   max-width: 100% !important;
-  max-height: none !important;
+  max-height: var(--tabyt-player-height, none) !important;
   padding: 0 !important;
   display: block !important;
   position: relative !important;
   z-index: 2 !important;
-  overflow: visible !important;
-  /* Subtle glow behind the player */
-  border-radius: var(--tabyt-radius) !important;
+  flex: 0 0 auto !important;
+  overflow: hidden !important;
+  border-radius: var(--tabyt-player-radius, 16px) !important;
+  transform: translateZ(0);
+  box-shadow: 0 28px 70px -28px rgba(0, 0, 0, 0.72) !important;
 }
 
 /* ─── Player inner chain: fill the definite #player box exactly ──────── */
 
-html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
   ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #player-container-outer,
-html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
   ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #player-container-inner,
-html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
   ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #player-container,
-html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
   ytd-watch-flexy:not([fullscreen]):not(:fullscreen) ytd-player,
-html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
   ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #movie_player {
   width: 100% !important;
   height: 100% !important;
@@ -179,28 +198,30 @@ html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullsc
   margin: 0 !important;
   padding: 0 !important;
   box-sizing: border-box !important;
-  overflow: visible !important;
+  overflow: hidden !important;
+  border-radius: var(--tabyt-player-radius, 16px) !important;
 }
 
 /* Keep controls and gradient visible at the bottom of the player */
-html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
   ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #movie_player .ytp-chrome-bottom,
-html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
   ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #movie_player .ytp-gradient-bottom {
   bottom: 0 !important;
   overflow: visible !important;
 }
 
-html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
   ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #movie_player,
-html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
   ytd-watch-flexy:not([fullscreen]):not(:fullscreen) ytd-player,
-html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
   ytd-watch-flexy:not([fullscreen]):not(:fullscreen) .html5-video-player {
-  overflow: visible !important;
+  overflow: hidden !important;
+  border-radius: var(--tabyt-player-radius, 16px) !important;
 }
 
-html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
   ytd-watch-flexy:not([fullscreen]):not(:fullscreen) .html5-video-container {
   position: absolute !important;
   top: 0 !important;
@@ -209,7 +230,7 @@ html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullsc
   height: 100% !important;
 }
 
-html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
   ytd-watch-flexy:not([fullscreen]):not(:fullscreen) video.html5-main-video {
   width: 100% !important;
   height: 100% !important;
@@ -218,14 +239,60 @@ html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullsc
   left: 0 !important;
   top: 0 !important;
   object-fit: contain !important;
+  border-radius: var(--tabyt-player-radius, 16px) !important;
 }
 
-/* Metadata / channel row always sits below in normal flow */
-html.tabyt-layout-on.tabyt-player-resize:not(.tabyt-fullscreen):not(:has(:fullscreen))
+/* Metadata stays one compact row under the video. The column does not scroll. */
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
   ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #below {
   position: relative !important;
   top: auto !important;
+  flex: 0 0 auto !important;
   clear: both !important;
+  margin: 8px 0 0 !important;
+  padding: 0 !important;
+}
+
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #primary ytd-watch-metadata,
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #primary #above-the-fold {
+  margin: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #primary #title,
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #primary h1.ytd-watch-metadata {
+  margin: 0 0 4px !important;
+  font-size: 16px !important;
+  line-height: 1.3 !important;
+}
+
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #primary #top-row,
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #primary #bottom-row,
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #primary ytd-watch-info-text {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  min-height: 0 !important;
+}
+
+/* Shelves that sit under the title and push the column past the viewport. */
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #primary ytd-merch-shelf-renderer,
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #primary ytd-metadata-row-container-renderer,
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #primary #ticket-shelf,
+html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+  ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #primary #middle-row {
+  display: none !important;
 }
 
 /* ─── Fullscreen: hand everything back to the browser ────────────────── */
@@ -330,16 +397,11 @@ html.tabyt-layout-on #movie_player:-webkit-full-screen .ytp-chrome-bottom {
   z-index: 2147483647 !important;
 }
 
-/* ─── Ambient background: blurred frame behind the sharp video ──────── */
+/* ─── Ambient background: blurred frame behind the whole page ───────── */
 
 /*
- * Two layers inside #player:
- *   0) #tabyt-ambient - a canvas copy of the current video frame, cover-fit
- *      to the whole player box, blurred and darkened. It fills letterbox area.
- *   1) #movie_player - YouTube's real player, untouched and sharp.
- *
- * The background is clipped to the player, never spilling into the page, and
- * all controls (native or TabYT's) stack above both layers.
+ * #tabyt-ambient is fixed to the viewport, behind ytd-app. A dark scrim keeps
+ * text readable. Images and the video stay unfiltered and fully opaque.
  */
 html.tabyt-layout-on ytd-watch-flexy #player {
   position: relative !important;
@@ -347,36 +409,138 @@ html.tabyt-layout-on ytd-watch-flexy #player {
 }
 
 html.tabyt-layout-on #tabyt-ambient {
-  position: absolute !important;
+  position: fixed !important;
   inset: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
+  width: 100vw !important;
+  height: 100vh !important;
   z-index: 0 !important;
   overflow: hidden !important;
   pointer-events: none !important;
-  border-radius: inherit !important;
+  border-radius: 0 !important;
   background: #000 !important;
+  contain: strict;
 }
 
 html.tabyt-layout-on #tabyt-ambient canvas {
   position: absolute !important;
-  /* Oversize slightly so the blur never fades to the host's black edge. */
-  top: -6% !important;
-  left: -6% !important;
+  top: -8% !important;
+  left: -8% !important;
   right: auto !important;
   bottom: auto !important;
-  width: 112% !important;
-  height: 112% !important;
+  width: 116% !important;
+  height: 116% !important;
   max-width: none !important;
   max-height: none !important;
   object-fit: cover !important;
   object-position: center !important;
   transform: none !important;
   opacity: 1 !important;
-  filter: blur(46px) saturate(1.35) brightness(0.78) !important;
+  /* Blur runs on the 96px bitmap. A filter here would blur the whole viewport. */
+  filter: none !important;
   pointer-events: none !important;
   border-radius: 0 !important;
   z-index: 0 !important;
+}
+
+/*
+ * The wash is brightest at the player and falls off, so it reads as light
+ * leaving the video. --tabyt-glow-* is the player's center, set from layout.js.
+ */
+html.tabyt-layout-on.tabyt-ambient #tabyt-ambient {
+  -webkit-mask-image: radial-gradient(
+    ellipse var(--tabyt-glow-rx, 46vw) var(--tabyt-glow-ry, 40vh) at var(--tabyt-glow-x, 28%) var(--tabyt-glow-y, 34%),
+    #000 0%,
+    rgba(0, 0, 0, 0.82) 26%,
+    rgba(0, 0, 0, 0.4) 52%,
+    rgba(0, 0, 0, 0.12) 74%,
+    transparent 90%
+  );
+  mask-image: radial-gradient(
+    ellipse var(--tabyt-glow-rx, 46vw) var(--tabyt-glow-ry, 40vh) at var(--tabyt-glow-x, 28%) var(--tabyt-glow-y, 34%),
+    #000 0%,
+    rgba(0, 0, 0, 0.82) 26%,
+    rgba(0, 0, 0, 0.4) 52%,
+    rgba(0, 0, 0, 0.12) 74%,
+    transparent 90%
+  );
+}
+
+html.tabyt-layout-on #tabyt-ambient::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse var(--tabyt-glow-rx, 46vw) var(--tabyt-glow-ry, 40vh) at var(--tabyt-glow-x, 28%) var(--tabyt-glow-y, 34%),
+    rgba(0, 0, 0, 0.08) 0%,
+    rgba(0, 0, 0, 0.38) 58%,
+    rgba(0, 0, 0, 0.66) 100%
+  );
+  pointer-events: none;
+}
+
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) ytd-app {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) body,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) ytd-app,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #content,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #page-manager,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) ytd-watch-flexy,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #columns,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #primary,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #secondary,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #primary-inner,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #secondary-inner,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #below,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #masthead,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) ytd-watch-metadata,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #above-the-fold,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-tabbar,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail [data-panel="info"] {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/*
+ * Ambient: Info description cards use tinted glass. Comment compose/feed
+ * zones stay transparent (see comment zone rules below). Tab chrome untouched.
+ */
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-info-card {
+  background: var(--tabyt-surface-glass) !important;
+  background-color: var(--tabyt-surface-glass) !important;
+  border-color: var(--tabyt-glass-border);
+  backdrop-filter: blur(var(--tabyt-glass-blur, 6px)) saturate(var(--tabyt-glass-saturate, 1.06));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tabyt-glass-border) 55%, transparent);
+}
+
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-info-link {
+  background: color-mix(in srgb, var(--tabyt-surface-glass) 70%, var(--tabyt-raised)) !important;
+  border: 1px solid color-mix(in srgb, var(--tabyt-glass-border) 80%, transparent);
+  backdrop-filter: none;
+}
+
+/*
+ * Structured rows stay flat inside the single outer .tabyt-info-card — no nested
+ * glass shells (that duplicated comment-thread card chrome).
+ */
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-info-structured > *,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-info-structured ytd-compact-link-renderer,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-info-structured ytd-macro-markers-list-item-renderer,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-info-structured ytd-video-description-infocards-section-renderer ytd-button-renderer {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
+}
+
+html.tabyt-layout-on.tabyt-ambient.tabyt-glass-lite:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-info-card,
+html.tabyt-layout-on.tabyt-ambient.tabyt-still:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-info-card {
+  backdrop-filter: none;
+  background: var(--tabyt-glass-fallback) !important;
+  background-color: var(--tabyt-glass-fallback) !important;
 }
 
 html.tabyt-layout-on ytd-watch-flexy #player,
@@ -393,12 +557,12 @@ html.tabyt-layout-on ytd-watch-flexy #movie_player {
  * sit invisible behind an opaque wall. :has() gates this to the exact player
  * that owns an ambient host, so turning the setting off restores native black.
  */
-html.tabyt-layout-on ytd-watch-flexy #player:has(#tabyt-ambient),
-html.tabyt-layout-on ytd-watch-flexy #player:has(#tabyt-ambient) ytd-player,
-html.tabyt-layout-on ytd-watch-flexy #player:has(#tabyt-ambient) #movie_player,
-html.tabyt-layout-on ytd-watch-flexy #player:has(#tabyt-ambient) .html5-video-player,
-html.tabyt-layout-on ytd-watch-flexy #player:has(#tabyt-ambient) .html5-video-container,
-html.tabyt-layout-on ytd-watch-flexy #player:has(#tabyt-ambient) video.html5-main-video {
+html.tabyt-layout-on.tabyt-ambient ytd-watch-flexy #player,
+html.tabyt-layout-on.tabyt-ambient ytd-watch-flexy #player ytd-player,
+html.tabyt-layout-on.tabyt-ambient ytd-watch-flexy #player #movie_player,
+html.tabyt-layout-on.tabyt-ambient ytd-watch-flexy #player .html5-video-player,
+html.tabyt-layout-on.tabyt-ambient ytd-watch-flexy #player .html5-video-container,
+html.tabyt-layout-on.tabyt-ambient ytd-watch-flexy #player video.html5-main-video {
   background: transparent !important;
   background-color: transparent !important;
 }
@@ -409,8 +573,17 @@ html.tabyt-layout-on ytd-watch-flexy video.html5-main-video {
 }
 
 /* The video keeps its aspect ratio; the ambient canvas fills the leftover. */
-html.tabyt-layout-on ytd-watch-flexy #player:has(#tabyt-ambient) video.html5-main-video {
+html.tabyt-layout-on.tabyt-ambient ytd-watch-flexy #player video.html5-main-video {
   object-fit: contain !important;
+  filter: none !important;
+  opacity: 1 !important;
+}
+
+html.tabyt-layout-on.tabyt-ambient img,
+html.tabyt-layout-on.tabyt-ambient ytd-thumbnail,
+html.tabyt-layout-on.tabyt-ambient yt-image {
+  opacity: 1 !important;
+  filter: none !important;
 }
 
 /* Controls and overlays always win the stacking order. */
@@ -423,7 +596,7 @@ html.tabyt-layout-on ytd-watch-flexy #tabyt-ambient ~ .ytp-caption-window-contai
   z-index: 40 !important;
 }
 
-/* ─── Secondary (right rail) ─────────────────────────────────────────── */
+/* ─── Right rail (tabs). The player column stays on the left. ───────── */
 
 html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
   ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #secondary {
@@ -439,15 +612,15 @@ html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
   box-sizing: border-box !important;
 }
 
-/* Layout variant: the rail is the left section of the page, the player moves right. */
-html.tabyt-layout-on ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #secondary {
-  order: -1;
-}
+/* Player on the left, divider, then the tab rail on the right. */
 html.tabyt-layout-on ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #primary {
   order: 0;
 }
 html.tabyt-layout-on ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #tabyt-divider {
-  order: 0;
+  order: 1;
+}
+html.tabyt-layout-on ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #secondary {
+  order: 2;
 }
 
 html.tabyt-layout-on ytd-watch-flexy #secondary-inner {
@@ -560,7 +733,9 @@ html.tabyt-layout-on #tabyt-rail .tabyt-panel[data-panel="live"] .tabyt-empty {
 }
 
 html.tabyt-layout-on #tabyt-rail .tabyt-panel[data-panel="live"] ytd-live-chat-frame,
-html.tabyt-layout-on #tabyt-rail .tabyt-panel[data-panel="live"] #chat {
+html.tabyt-layout-on #tabyt-rail .tabyt-panel[data-panel="live"] #chat,
+html.tabyt-layout-on #tabyt-rail .tabyt-panel.tabyt-discussion-live ytd-live-chat-frame,
+html.tabyt-layout-on #tabyt-rail .tabyt-panel.tabyt-discussion-live #chat {
   display: block;
   width: 100%;
   height: 100%;
@@ -568,9 +743,9 @@ html.tabyt-layout-on #tabyt-rail .tabyt-panel[data-panel="live"] #chat {
   max-width: 100%;
 }
 
-/* Live streams swap comments for chat, both in the rail and in the page. */
-html.tabyt-layout-on.tabyt-live-stream ytd-watch-flexy ytd-comments {
-  display: none !important;
+html.tabyt-layout-on #tabyt-rail .tabyt-panel.tabyt-discussion-live {
+  padding: 0;
+  overflow: hidden;
 }
 
 /* ─── Tab bar ────────────────────────────────────────────────────────── */
@@ -579,14 +754,26 @@ html.tabyt-layout-on #tabyt-rail .tabyt-tabbar {
   display: flex;
   flex: 0 0 auto;
   flex-wrap: nowrap;
-  gap: 0;
+  gap: 2px;
   margin: 0;
-  padding: 0 8px;
-  /* Glass-on-glass strip */
-  background: rgba(255,255,255,0.03);
-  border-bottom: 1px solid var(--tabyt-glass-border);
+  padding: 10px 12px 0;
+  background: transparent;
+  border-bottom: 0;
   position: relative;
   z-index: 1;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-tab-indicator {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 0;
+  border-radius: 2px;
+  background: var(--tabyt-text);
+  pointer-events: none;
+  transform: translateX(0);
+  transition: transform var(--tabyt-transition), width var(--tabyt-transition);
 }
 
 html.tabyt-layout-on #tabyt-rail .tabyt-tab {
@@ -594,13 +781,14 @@ html.tabyt-layout-on #tabyt-rail .tabyt-tab {
   flex: 1 1 0;
   min-width: 0;
   margin: 0;
-  padding: 11px 6px 9px;
+  padding: 8px 8px 12px;
   border: 0;
+  border-radius: 8px;
   background: transparent;
   color: var(--tabyt-muted);
-  font: 500 12px/1 "Roboto", "Arial", sans-serif;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  font: 500 13px/1.2 "Roboto", "Arial", sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
   text-align: center;
   cursor: pointer;
   white-space: nowrap;
@@ -608,39 +796,22 @@ html.tabyt-layout-on #tabyt-rail .tabyt-tab {
   text-overflow: ellipsis;
   transition: color var(--tabyt-transition), background var(--tabyt-transition), transform var(--tabyt-transition);
   position: relative;
-}
-
-html.tabyt-layout-on #tabyt-rail .tabyt-tab::after {
-  content: "";
-  position: absolute;
-  bottom: -1px;
-  left: 20%;
-  right: 20%;
-  height: 2px;
-  border-radius: 2px 2px 0 0;
-  background: var(--tabyt-accent);
-  transform: scaleX(0);
-  transform-origin: center;
-  transition: transform var(--tabyt-transition);
+  z-index: 1;
 }
 
 html.tabyt-layout-on #tabyt-rail .tabyt-tab:hover {
   color: var(--tabyt-text);
-  background: var(--tabyt-glass);
+  background: transparent;
 }
 
 html.tabyt-layout-on #tabyt-rail .tabyt-tab:focus-visible {
   outline: 2px solid var(--tabyt-accent);
-  outline-offset: -3px;
-  border-radius: 4px;
+  outline-offset: 2px;
+  border-radius: 8px;
 }
 
 html.tabyt-layout-on #tabyt-rail .tabyt-tab[aria-selected="true"] {
   color: var(--tabyt-text);
-}
-
-html.tabyt-layout-on #tabyt-rail .tabyt-tab[aria-selected="true"]::after {
-  transform: scaleX(1);
 }
 
 html.tabyt-layout-on #tabyt-rail .tabyt-tab[hidden] {
@@ -663,7 +834,7 @@ html.tabyt-layout-on #tabyt-rail .tabyt-panel {
   flex: 1 1 auto;
   width: 100%;
   min-height: 0;
-  padding: 16px 14px 32px;
+  padding: 12px 12px 20px;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -680,20 +851,48 @@ html.tabyt-layout-on #tabyt-rail .tabyt-panel::-webkit-scrollbar-thumb {
   background: var(--tabyt-raised);
 }
 
+/*
+ * Closed tabs leave the flex flow. content-visibility: hidden skips layout
+ * for Comments, Related and Live until that tab is opened.
+ */
 html.tabyt-layout-on #tabyt-rail .tabyt-panel:not(.is-active) {
-  display: none;
+  content-visibility: hidden;
+  contain-intrinsic-size: auto 480px;
+  position: absolute !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-panel.is-active {
+  content-visibility: visible;
+  position: relative;
+  animation: tabyt-panel-in var(--tabyt-transition) both;
+}
+
+@keyframes tabyt-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* Animated entry: the extension shell renders first; the data slides in and stays visible. */
 html.tabyt-entering #tabyt-rail .tabyt-tabbar,
 html.tabyt-entering #tabyt-rail .tabyt-panels,
 html.tabyt-entering #tabyt-rail .tabyt-related-list,
-html.tabyt-entering #tabyt-rail .tabyt-info-title,
-html.tabyt-entering #tabyt-rail .tabyt-info-meta,
 html.tabyt-entering #tabyt-rail .tabyt-desc-content {
   opacity: 1;
   transform: translateY(8px);
-  transition: transform .3s var(--tabyt-ease);
+  transition: transform var(--tabyt-transition);
 }
 /* Data lands just after the shell appears: a small stagger, nothing distracting. */
 html.tabyt-entering #tabyt-rail .tabyt-tabbar { transition-delay: 0s; }
@@ -722,60 +921,54 @@ html.tabyt-layout-on #tabyt-rail ytd-watch-next-secondary-results-renderer {
 /* ─── Info panel: title + description ───────────────────────────────── */
 
 /*
- * When layoutInfo is on, hide the original nodes in the left column to avoid
- * duplication. A stable copy sits in the rail and doesn't flicker.
+ * Title, channel, views and likes stay under the player. Only the description
+ * expander is hidden there — it includes the "...more" snippet, and the view
+ * count sits in a sibling (ytd-watch-info-text), so it remains visible.
  */
-html.tabyt-layout-on.tabyt-rail-info ytd-watch-flexy #primary ytd-watch-metadata #title,
-html.tabyt-layout-on.tabyt-rail-info ytd-watch-flexy #primary ytd-watch-metadata #description,
-html.tabyt-layout-on.tabyt-rail-info ytd-watch-flexy #primary ytd-watch-metadata #description-inline-expander,
-html.tabyt-layout-on.tabyt-rail-info ytd-watch-flexy #primary #above-the-fold #title,
-html.tabyt-layout-on.tabyt-rail-info ytd-watch-flexy #primary #description-inline-expander {
+html.tabyt-layout-on.tabyt-rail-info ytd-watch-flexy #primary #description-inline-expander,
+html.tabyt-layout-on.tabyt-rail-info ytd-watch-flexy #primary ytd-text-inline-expander#description-inline-expander {
   display: none !important;
 }
 
-/* Info body: the title + stats sit on the left; the description is the right column. */
-html.tabyt-layout-on #tabyt-rail .tabyt-info-body {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-}
-
-html.tabyt-layout-on #tabyt-rail .tabyt-info-desc-column {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-html.tabyt-layout-on #tabyt-rail .tabyt-info-side {
-  flex: 0 0 190px;
-  max-width: 28%;
-  padding-right: 14px;
-  border-right: 1px solid var(--tabyt-line);
-}
-
-html.tabyt-layout-on #tabyt-rail .tabyt-info-title {
-  margin: 0 0 12px;
-  color: var(--tabyt-text);
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.4;
-}
-
-html.tabyt-layout-on #tabyt-rail .tabyt-info-meta {
-  margin: -4px 0 12px;
-  color: var(--tabyt-muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
 html.tabyt-layout-on #tabyt-rail .tabyt-info-desc {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   color: var(--tabyt-muted);
   font-size: 13px;
   line-height: 1.6;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
+html.tabyt-layout-on #tabyt-rail .tabyt-desc-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-card {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  margin: 0;
+  padding: 12px 12px 10px;
+  border: 1px solid var(--tabyt-line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--tabyt-bg) 88%, var(--tabyt-text) 12%);
+  overflow: hidden;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-card.tabyt-skips {
+  margin-bottom: 4px;
+  padding: 10px 12px;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc,
 html.tabyt-layout-on #tabyt-rail .tabyt-info-desc * {
+  min-width: 0;
   max-width: 100%;
+  white-space: normal;
 }
 
 html.tabyt-layout-on #tabyt-rail .tabyt-info-desc a {
@@ -801,12 +994,890 @@ html.tabyt-layout-on #tabyt-rail .tabyt-desc-content {
   overflow: hidden;
 }
 
+html.tabyt-layout-on #tabyt-rail .tabyt-desc-text {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  white-space: pre-wrap;
+  color: var(--tabyt-text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-desc-text .tabyt-info-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-section + .tabyt-info-section {
+  margin-top: 0;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-heading {
+  margin: 0 0 8px;
+  color: var(--tabyt-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc a {
+  overflow-wrap: anywhere;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--tabyt-raised);
+  color: var(--tabyt-text) !important;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-decoration: none !important;
+  vertical-align: middle;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-link:hover {
+  background: color-mix(in srgb, var(--tabyt-cta) 18%, var(--tabyt-raised));
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  position: relative;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured > ytd-macro-markers-list-renderer,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured > ytd-video-description-infocards-section-renderer,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured > ytd-horizontal-card-list-renderer,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured > ytd-video-description-transcript-section-renderer {
+  display: block !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured yt-img-shadow,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured yt-img-shadow img,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured img {
+  border-radius: 8px;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured yt-img-shadow,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured #avatar,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured #thumbnail {
+  flex: 0 0 auto;
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px;
+  min-height: 40px;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured yt-img-shadow img,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured #avatar img,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured #thumbnail img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured ytd-horizontal-card-list-renderer ytd-compact-link-renderer,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured ytd-video-description-infocards-section-renderer ytd-button-renderer {
+  min-height: 48px;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured ytd-video-description-infocards-section-renderer,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured ytd-video-description-transcript-section-renderer,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured ytd-horizontal-card-list-renderer {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured #cards,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured #items,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured #scroll-container {
+  display: flex !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
+  gap: 8px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  transform: none !important;
+  position: static !important;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured ytd-macro-markers-list-renderer,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured ytd-macro-markers-list-renderer #contents,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured ytd-macro-markers-list-renderer #items,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc ytd-macro-markers-list-renderer,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc ytd-macro-markers-list-renderer #contents,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc ytd-macro-markers-list-renderer #items {
+  display: flex !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
+  position: static !important;
+  inset: auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  transform: none !important;
+  overflow: visible !important;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured ytd-macro-markers-list-item-renderer,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc ytd-macro-markers-list-item-renderer {
+  position: relative !important;
+  inset: auto !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+  z-index: auto !important;
+  flex: 0 0 auto;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured ytd-compact-link-renderer,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured ytd-macro-markers-list-item-renderer,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured ytd-video-description-infocards-section-renderer ytd-button-renderer {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 10px 4px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--tabyt-line) 72%, transparent);
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured ytd-compact-link-renderer:last-child,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured ytd-macro-markers-list-item-renderer:last-child,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured ytd-video-description-infocards-section-renderer ytd-button-renderer:last-child {
+  border-bottom: 0;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured ytd-video-description-transcript-section-renderer button,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured ytd-video-description-transcript-section-renderer tp-yt-paper-button {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--tabyt-line);
+  border-radius: 10px;
+  background: transparent !important;
+  color: var(--tabyt-text) !important;
+  font: inherit;
+  box-shadow: none !important;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-structured ytd-video-description-header-renderer {
+  display: none !important;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-chapter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-chapter,
+html.tabyt-layout-on #tabyt-rail .tabyt-timestamp {
+  border: 0;
+  background: transparent;
+  color: var(--tabyt-cta);
+  font: inherit;
+  cursor: pointer;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-chapter {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 6px;
+  border-radius: 10px;
+  text-align: left;
+  color: inherit;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-chapter:not(:has(.tabyt-chapter-thumb)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-chapter:hover,
+html.tabyt-layout-on #tabyt-rail .tabyt-timestamp:hover {
+  background: var(--tabyt-raised);
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-chapter-thumb {
+  width: 112px;
+  height: 63px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .06);
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-chapter-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-chapter-time {
+  color: var(--tabyt-cta);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-chapter-title {
+  color: var(--tabyt-text);
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-desc-image {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  margin: 8px 0;
+  border-radius: 10px;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc img:not(.tabyt-chapter-thumb):not(.tabyt-desc-image) {
+  display: inline-block;
+  width: 1.05em;
+  height: 1.05em;
+  margin: 0 3px;
+  object-fit: contain;
+  vertical-align: -0.15em;
+}
+
+/* YouTube's horizontal chapter scroller collapses in this column. Stack it. */
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc ytd-horizontal-card-list-renderer,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc yt-horizontal-list-renderer,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc ytd-macro-markers-list-renderer,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc #items.ytd-horizontal-card-list-renderer,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc #scroll-container {
+  display: flex !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: visible !important;
+  transform: none !important;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc ytd-macro-markers-list-item-renderer,
+html.tabyt-layout-on #tabyt-rail .tabyt-info-desc ytd-chapter-renderer {
+  display: flex !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 0 6px !important;
+}
+
+/* The engagement panel is a second comments layer. Keep it off the page. */
+html.tabyt-layout-on ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-comments-section"] {
+  display: none !important;
+}
+
+/* Comments live in the tab. Hide the copy YouTube leaves under the player. */
+html.tabyt-layout-on ytd-watch-flexy ytd-comments {
+  display: none !important;
+}
+
+html.tabyt-layout-on #tabyt-rail [data-panel="comments"]:not(.tabyt-discussion-live) {
+  padding: 0;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-panel.tabyt-comments-panel {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+html.tabyt-layout-on #tabyt-rail [data-panel="comments"] ytd-comments#comments {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+  min-height: 0;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-comment-feed-zone {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--tabyt-raised) transparent;
+  background: transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-comment-feed-zone::-webkit-scrollbar {
+  width: 4px;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-comment-feed-zone::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: var(--tabyt-raised);
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-comments-panel .tabyt-comment-feed-zone ytd-comments#comments {
+  flex: 1 1 auto;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-comments-panel ytd-comments#comments #contents {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 4px 12px 28px;
+  overflow: visible;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-comment-compose-zone {
+  position: relative;
+  z-index: 3;
+  flex: 0 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--tabyt-dock-bg);
+  background-color: var(--tabyt-dock-bg);
+  backdrop-filter: none;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-comment-dock {
+  position: static;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 14px 10px;
+  border-bottom: 1px solid var(--tabyt-line);
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-comment-dock #simple-box,
+html.tabyt-layout-on #tabyt-rail .tabyt-comment-dock #title,
+html.tabyt-layout-on #tabyt-rail .tabyt-comment-dock #placeholder-area {
+  position: static !important;
+  top: auto !important;
+  background: var(--tabyt-bg) !important;
+  background-color: var(--tabyt-bg) !important;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-comment-dock #title {
+  order: 1;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-comment-dock #simple-box {
+  order: 2;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--tabyt-line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--tabyt-bg) 90%, var(--tabyt-text) 10%);
+}
+
+/*
+ * Ambient: compose and feed zones stay fully transparent so the glow blends
+ * through count/sort, composer, and every thread (sticky compose unchanged).
+ */
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-comment-compose-zone,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-comment-feed-zone,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-comment-dock {
+  background: transparent !important;
+  background-color: transparent !important;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-comment-dock {
+  border-bottom-color: color-mix(in srgb, var(--tabyt-glass-border) 55%, transparent);
+}
+
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-comment-dock #simple-box,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-comment-dock #title,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-comment-dock #placeholder-area,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-comment-dock #simple-box ytd-comment-simplebox-renderer,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-comment-dock #simple-box #box,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-comment-dock #simple-box #creation-input,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-comment-dock #simple-box #comment-dialog,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-comment-dock #simple-box tp-yt-paper-input-container {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-comment-dock #simple-box {
+  border-color: color-mix(in srgb, var(--tabyt-glass-border) 70%, transparent);
+  background: transparent !important;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-comment-dock #sort-menu tp-yt-paper-button,
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-comment-dock yt-sort-filter-sub-menu-renderer button {
+  background: transparent !important;
+  border: 1px solid color-mix(in srgb, var(--tabyt-glass-border) 75%, transparent);
+  backdrop-filter: none;
+}
+
+html.tabyt-layout-on.tabyt-ambient:not(.tabyt-fullscreen):not(:has(:fullscreen)) #tabyt-rail .tabyt-comment-feed-zone ytd-comments#comments #contents > ytd-comment-thread-renderer {
+  background: transparent !important;
+  background-color: transparent !important;
+  border-color: color-mix(in srgb, var(--tabyt-glass-border) 55%, transparent);
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-comment-dock #placeholder-area {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  border-bottom: 0;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-comment-dock #title {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding: 2px 2px 4px;
+  border-top: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--tabyt-line) 70%, transparent);
+  color: var(--tabyt-text);
+  font-size: 13px;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-comment-dock #count,
+html.tabyt-layout-on #tabyt-rail .tabyt-comment-dock #leading-section {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-comment-dock #additional-section {
+  margin-left: auto;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-comment-dock #sort-menu,
+html.tabyt-layout-on #tabyt-rail .tabyt-comment-dock yt-sort-filter-sub-menu-renderer {
+  border-radius: 999px;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-comment-dock #sort-menu tp-yt-paper-button,
+html.tabyt-layout-on #tabyt-rail .tabyt-comment-dock yt-sort-filter-sub-menu-renderer button {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px !important;
+  background: var(--tabyt-raised) !important;
+  color: var(--tabyt-text) !important;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comments#comments ytd-comments-header-renderer {
+  display: none !important;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model #header,
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model #header-author,
+html.tabyt-layout-on #tabyt-rail ytd-comment-thread-renderer #header-author {
+  overflow: visible !important;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model #header,
+html.tabyt-layout-on #tabyt-rail ytd-comment-thread-renderer #header {
+  flex-wrap: nowrap !important;
+  align-items: flex-start !important;
+}
+
+html.tabyt-layout-on #tabyt-rail #header-author {
+  display: flex !important;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: flex-start;
+  gap: 2px 6px;
+  min-width: 0;
+}
+
+html.tabyt-layout-on #tabyt-rail #header-author,
+html.tabyt-layout-on #tabyt-rail ytd-channel-name,
+html.tabyt-layout-on #tabyt-rail ytd-channel-name #text {
+  color: var(--tabyt-text) !important;
+  opacity: 1 !important;
+}
+
+/*
+ * YouTube paints badge-chip surfaces and primary text on the whole header
+ * row. Our stats chip must ignore that so counts stay readable on the pill.
+ */
+html.tabyt-layout-on #tabyt-rail #header-author .tabyt-author-meta {
+  isolation: isolate;
+  background: var(--tabyt-pill-bg) !important;
+  background-color: var(--tabyt-pill-bg) !important;
+  color: var(--tabyt-pill-muted) !important;
+  -webkit-text-fill-color: var(--tabyt-pill-muted) !important;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model #author-text,
+html.tabyt-layout-on #tabyt-rail #header-author #author-text,
+html.tabyt-layout-on #tabyt-rail #header-author #author-text a {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-author-meta {
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-flow: row nowrap;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  margin: 0;
+  padding: 4px 11px;
+  white-space: nowrap;
+  border: 1px solid var(--tabyt-line);
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 15px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  opacity: 0.95;
+  transition: opacity var(--tabyt-transition), border-color var(--tabyt-transition);
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-author-meta.tabyt-author-ready {
+  opacity: 1;
+  border-color: color-mix(in srgb, var(--tabyt-cta) 22%, var(--tabyt-line));
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-author-stat {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+  color: var(--tabyt-pill-muted) !important;
+  -webkit-text-fill-color: var(--tabyt-pill-muted) !important;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-author-stat strong {
+  color: var(--tabyt-pill-fg) !important;
+  -webkit-text-fill-color: var(--tabyt-pill-fg) !important;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-author-stat span:last-child {
+  color: var(--tabyt-pill-muted) !important;
+  -webkit-text-fill-color: var(--tabyt-pill-muted) !important;
+  font-size: 10px;
+  text-transform: lowercase;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-author-sep {
+  color: var(--tabyt-pill-muted) !important;
+  -webkit-text-fill-color: var(--tabyt-pill-muted) !important;
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+/* ─── Comment threads ─────────────────────────────────────────────────── */
+
+html.tabyt-layout-on #tabyt-rail ytd-comments#comments #contents > ytd-comment-thread-renderer {
+  display: block;
+  margin: 0 0 10px;
+  padding: 12px 12px 10px;
+  border: 1px solid var(--tabyt-line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--tabyt-bg) 90%, var(--tabyt-text) 10%);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 140px;
+  contain: layout style paint;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-replies-renderer ytd-comment-thread-renderer,
+html.tabyt-layout-on #tabyt-rail ytd-comment-replies-renderer > ytd-comment-view-model {
+  margin: 0;
+  padding: 10px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-thread-renderer:has(ytd-pinned-comment-badge-renderer) {
+  border-color: color-mix(in srgb, var(--tabyt-cta) 40%, var(--tabyt-line));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tabyt-cta) 14%, transparent);
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-pinned-comment-badge-renderer {
+  margin: 0 0 10px;
+  padding: 0 2px;
+  color: var(--tabyt-cta);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model {
+  padding: 0;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model #author-thumbnail,
+html.tabyt-layout-on #tabyt-rail ytd-comment-thread-renderer #author-thumbnail {
+  width: 40px !important;
+  height: 40px !important;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model #author-thumbnail img,
+html.tabyt-layout-on #tabyt-rail ytd-comment-thread-renderer #author-thumbnail img {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model #header,
+html.tabyt-layout-on #tabyt-rail ytd-comment-thread-renderer #header {
+  align-items: flex-start !important;
+  gap: 4px 8px;
+  margin-bottom: 4px;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model #author-text,
+html.tabyt-layout-on #tabyt-rail #author-text.ytd-comment-view-model,
+html.tabyt-layout-on #tabyt-rail #header-author #author-text {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model #published-time-text,
+html.tabyt-layout-on #tabyt-rail .ytd-comment-view-model #published-time-text {
+  color: var(--tabyt-muted) !important;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model #content-text,
+html.tabyt-layout-on #tabyt-rail .ytd-comment-view-model #content-text,
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model yt-formatted-string {
+  color: var(--tabyt-text) !important;
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model #body,
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model #main,
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model #expander,
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model #comment-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model #action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  margin-top: 8px;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model #action-buttons ytd-toggle-button-renderer,
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model #action-buttons #reply-button-end {
+  margin: 0 !important;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model #action-buttons button {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-view-model #action-buttons button:hover {
+  background: var(--tabyt-raised) !important;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-thread-renderer > #replies {
+  margin: 8px 0 0 10px;
+  padding: 0 0 0 8px;
+  border-left: 1px solid color-mix(in srgb, var(--tabyt-line) 92%, var(--tabyt-muted));
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-replies-renderer {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-replies-renderer ytd-comment-replies-renderer > #replies,
+html.tabyt-layout-on #tabyt-rail ytd-comment-replies-renderer ytd-comment-thread-renderer > #replies {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: 0;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-replies-renderer ytd-comment-view-model {
+  padding: 10px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--tabyt-line) 70%, transparent);
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-replies-renderer ytd-comment-view-model:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-replies-renderer ytd-comment-view-model #author-thumbnail {
+  width: 32px !important;
+  height: 32px !important;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-replies-renderer ytd-comment-view-model #author-thumbnail img {
+  width: 32px !important;
+  height: 32px !important;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-thread-renderer #more-replies,
+html.tabyt-layout-on #tabyt-rail ytd-comment-thread-renderer ytd-button-renderer#more-replies {
+  margin-top: 6px;
+}
+
+html.tabyt-layout-on #tabyt-rail ytd-comment-thread-renderer #more-replies button {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-timestamp {
+  display: inline-flex;
+  margin: 0 2px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--tabyt-cta) 16%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Chapters appended from the native description, so the copy shows the same data. */
 html.tabyt-layout-on #tabyt-rail .tabyt-desc-chapters {
   margin-top: 8px;
   color: var(--tabyt-muted);
   font-size: 12px;
 }
+
+html.tabyt-layout-on #tabyt-rail .tabyt-skips {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 14px;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-skips-title {
+  margin: 0 0 4px;
+  color: var(--tabyt-muted);
+  font-size: 12px;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-skip {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-skip:hover {
+  background: var(--tabyt-raised);
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-skip span:first-child {
+  flex: 0 0 auto;
+  color: var(--tabyt-cta);
+  font-variant-numeric: tabular-nums;
+}
+
+.tabyt-skip-marks {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.tabyt-skip-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+  background: #00d400;
+  opacity: 0.95;
+}
+
+.tabyt-skip-mark[data-category="selfpromo"] { background: #ffff00; }
+.tabyt-skip-mark[data-category="interaction"] { background: #cc00ff; }
+.tabyt-skip-mark[data-category="intro"] { background: #00ffff; }
+.tabyt-skip-mark[data-category="outro"] { background: #0202ed; }
+.tabyt-skip-mark[data-category="preview"] { background: #008fd6; }
+.tabyt-skip-mark[data-category="music_offtopic"] { background: #ff9900; }
+.tabyt-skip-mark[data-category="filler"] { background: #7300ff; }
+.tabyt-skip-mark[data-category="exclusive_access"] { background: #008a5b; }
 
 html.tabyt-layout-on #tabyt-rail .tabyt-empty {
   margin: 12px 0;
@@ -818,10 +1889,21 @@ html.tabyt-layout-on #tabyt-rail .tabyt-empty {
 
 /* ─── Related videos ─────────────────────────────────────────────────── */
 
+html.tabyt-layout-on #tabyt-rail .tabyt-panel[data-panel="other"].is-active,
+html.tabyt-layout-on #tabyt-rail .tabyt-panel[data-panel="related"].is-active {
+  padding-bottom: 28px;
+}
+
+html.tabyt-layout-on #tabyt-rail .tabyt-panel[data-panel="other"].is-active ytd-watch-next-secondary-results-renderer,
+html.tabyt-layout-on #tabyt-rail .tabyt-panel[data-panel="other"].is-active #related {
+  padding: 4px 4px 8px;
+}
+
 html.tabyt-layout-on #tabyt-rail .tabyt-related-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
+  padding-bottom: 8px;
 }
 
 html.tabyt-layout-on #tabyt-rail .tabyt-related-item {
@@ -902,7 +1984,7 @@ html.tabyt-custom-controls #movie_player {
   background: linear-gradient(to top, rgba(0,0,0,.88), rgba(0,0,0,.5) 55%, transparent);
   user-select: none;
   -webkit-user-select: none;
-  transition: opacity .22s ease, transform .22s ease;
+  transition: opacity var(--tabyt-transition), transform var(--tabyt-transition);
 }
 
 /* Idle auto-hide: mouse movement over the player brings it straight back. */
@@ -971,7 +2053,7 @@ html.tabyt-custom-controls .tabyt-player-controls.tabyt-bar-hidden {
   color: #fff;
   font: 600 12px/1 "Roboto", "Arial", sans-serif;
   cursor: pointer;
-  transition: background .15s ease;
+  transition: background var(--tabyt-transition);
 }
 
 .tabyt-pc-btn:hover,
@@ -1065,6 +2147,17 @@ html.tabyt-custom-controls .tabyt-player-controls.tabyt-bar-hidden {
     height: min(70vh, 620px) !important;
     padding-top: 0;
     overflow: hidden !important;
+  }
+
+  /* Stacked: player first, tabs underneath. */
+  html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+    ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #primary {
+    order: 0 !important;
+  }
+
+  html.tabyt-layout-on:not(.tabyt-fullscreen):not(:has(:fullscreen))
+    ytd-watch-flexy:not([fullscreen]):not(:fullscreen) #secondary {
+    order: 1 !important;
   }
 
   html.tabyt-layout-on:not(.tabyt-fullscreen) #tabyt-divider {

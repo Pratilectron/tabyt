@@ -10,7 +10,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  var VERSION = "1.0.23";
+  var VERSION = "1.0.56";
   var HISTORY_MAX_SAMPLES = 1500;
   var RESUME_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -40,8 +40,15 @@
     layoutRelated: true,
     layoutChat: true,
     layoutLive: true,
+    layoutDiscussion: "comments",
     layoutAmbient: true,
+    layoutSkips: true,
     playerResize: false,
+    rememberLayoutSize: true,
+    layoutSide: 420,
+    layoutRadius: 16,
+    layoutMotion: true,
+    layoutStartTab: "info",
     customControls: true
   });
 
@@ -71,8 +78,15 @@
     layoutRelated: { type: "boolean" },
     layoutChat: { type: "boolean" },
     layoutLive: { type: "boolean" },
+    layoutDiscussion: { type: "enum", values: ["comments", "live"] },
     layoutAmbient: { type: "boolean" },
+    layoutSkips: { type: "boolean" },
     playerResize: { type: "boolean" },
+    rememberLayoutSize: { type: "boolean" },
+    layoutSide: { type: "number", min: 280, max: 680 },
+    layoutRadius: { type: "number", min: 0, max: 28 },
+    layoutMotion: { type: "boolean" },
+    layoutStartTab: { type: "enum", values: ["info", "comments", "other", "related", "live"] },
     customControls: { type: "boolean" }
   };
 
@@ -465,6 +479,178 @@
     return result;
   }
 
+  function textValue(node) {
+    if (!node || typeof node !== "object") return "";
+    if (typeof node.simpleText === "string") return node.simpleText;
+    if (Array.isArray(node.runs)) {
+      return node.runs.map(function (run) {
+        return run && typeof run.text === "string" ? run.text : "";
+      }).join("");
+    }
+    return "";
+  }
+
+  function thumbUrl(source) {
+    var thumbs = source && source.thumbnail && source.thumbnail.thumbnails;
+    if (!Array.isArray(thumbs)) return "";
+    var best = "";
+    var bestWidth = -1;
+    thumbs.forEach(function (thumb) {
+      if (!thumb || typeof thumb.url !== "string") return;
+      var url = thumb.url.indexOf("//") === 0 ? "https:" + thumb.url : thumb.url;
+      if (url.indexOf("https://") !== 0) return;
+      var width = Number(thumb.width) || 0;
+      if (width >= bestWidth) {
+        bestWidth = width;
+        best = url.slice(0, 500);
+      }
+    });
+    return best;
+  }
+
+  function pushChapter(out, seen, title, seconds, image) {
+    var label = String(title || "").replace(/\s+/g, " ").trim();
+    var time = Number(seconds);
+    if (!label || !Number.isFinite(time) || time < 0 || time > 86400) return;
+    var rounded = Math.round(time);
+    var key = rounded + "\n" + label;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({
+      title: label.slice(0, 180),
+      seconds: rounded,
+      image: typeof image === "string" ? image : ""
+    });
+  }
+
+  function chaptersFromPanels(panels, out, seen) {
+    if (!Array.isArray(panels)) return;
+    panels.forEach(function (panel) {
+      var renderer = panel && panel.engagementPanelSectionListRenderer;
+      if (!renderer) return;
+      var id = String(renderer.panelIdentifier || "");
+      if (id.indexOf("macro-markers-description-chapters") === -1) return;
+      var list = renderer.content && renderer.content.macroMarkersListRenderer;
+      var contents = list && list.contents;
+      if (!Array.isArray(contents)) return;
+      contents.forEach(function (row) {
+        var item = row && row.macroMarkersListItemRenderer;
+        if (!item) return;
+        var endpoint = (item.onTap && item.onTap.watchEndpoint) || item.watchEndpoint;
+        var seconds = endpoint ? Number(endpoint.startTimeSeconds) : NaN;
+        pushChapter(out, seen, textValue(item.title), seconds, thumbUrl(item));
+      });
+    });
+  }
+
+  function chaptersFromMarkers(player, out, seen) {
+    var overlays = player && player.playerOverlays && player.playerOverlays.playerOverlayRenderer;
+    var decorated = overlays && overlays.decoratedPlayerBarRenderer &&
+      overlays.decoratedPlayerBarRenderer.decoratedPlayerBarRenderer;
+    var markers = decorated && decorated.playerBar &&
+      decorated.playerBar.multiMarkersPlayerBarRenderer &&
+      decorated.playerBar.multiMarkersPlayerBarRenderer.markersMap;
+    if (!Array.isArray(markers)) return;
+    markers.forEach(function (entry) {
+      var chapters = entry && entry.value && entry.value.chapters;
+      if (!Array.isArray(chapters)) return;
+      chapters.forEach(function (row) {
+        var chapter = row && row.chapterRenderer;
+        if (!chapter) return;
+        var millis = Number(chapter.timeRangeStartMillis);
+        pushChapter(out, seen, textValue(chapter.title), Number.isFinite(millis) ? millis / 1000 : NaN, thumbUrl(chapter));
+      });
+    });
+  }
+
+  /*
+   * The watch page already embeds the full description and chapter times.
+   * Reading them avoids cloning the description DOM and clicking "...more".
+   */
+  function trimCount(value) {
+    var n = Number(value);
+    if (!isFinite(n)) return "";
+    return (Math.round(n * 100) / 100).toFixed(2).replace(/\.?0+$/, "");
+  }
+
+  function compactCount(value) {
+    var text = String(value || "").replace(/\u00a0/g, " ").trim();
+    if (!text) return "";
+    var million = text.match(/([\d.,]+)\s*(?:million|مليون)/i);
+    if (million) return trimCount(million[1].replace(/,/g, "")) + "M";
+    var thousand = text.match(/([\d.,]+)\s*(?:thousand|ألف|الف)/i);
+    if (thousand) return trimCount(thousand[1].replace(/,/g, "")) + "K";
+    var billion = text.match(/([\d.,]+)\s*(?:billion|مليار)/i);
+    if (billion) return trimCount(billion[1].replace(/,/g, "")) + "B";
+    var short = text.match(/([\d.,]+)\s*([KMB])\b/i);
+    if (short) return trimCount(short[1].replace(/,/g, "")) + short[2].toUpperCase();
+    var plain = text.replace(/subscribers?/ig, "").replace(/videos?/ig, "").match(/[\d.,]+/);
+    if (!plain) return "";
+    var n = Number(plain[0].replace(/,/g, ""));
+    if (!isFinite(n)) return plain[0];
+    if (n >= 1e9) return trimCount(n / 1e9) + "B";
+    if (n >= 1e6) return trimCount(n / 1e6) + "M";
+    if (n >= 1000) return trimCount(n / 1000) + "K";
+    return String(Math.round(n));
+  }
+
+  function jsonText(value) {
+    return String(value || "").replace(/\\u0026/g, "&").replace(/\\"/g, "\"").replace(/\\n/g, " ");
+  }
+
+  /*
+   * Public channel pages embed the display name, subscriber count and video
+   * count. Current pages put both counts in pageHeaderViewModel metadata
+   * rows. Older pages used subscriberCountText and videoCountText.
+   */
+  function parseChannelStats(html) {
+    var text = String(html || "");
+    var name = "";
+    var title = text.match(/"pageHeaderViewModel":\{"title":\{"dynamicTextViewModel":\{"text":\{"content":"((?:\\.|[^"\\])*)"/);
+    if (!title) title = text.match(/"channelMetadataRenderer":\{"title":"((?:\\.|[^"\\])*)"/);
+    if (title) name = jsonText(title[1]).slice(0, 80);
+    var subs = "";
+    var videos = "";
+    var headerAt = text.indexOf('"pageHeaderViewModel":{');
+    if (headerAt >= 0) {
+      var slice = text.slice(headerAt, headerAt + 12000);
+      var rowAt = slice.indexOf('"metadataRows":[');
+      var rows = rowAt >= 0 ? slice.slice(rowAt, rowAt + 2500) : "";
+      var partRe = /"content":"((?:\\.|[^"\\])*)"/g;
+      var part;
+      while ((part = partRe.exec(rows))) {
+        var line = jsonText(part[1]).replace(/\u00a0/g, " ").trim();
+        if (!line || line.charAt(0) === "@") continue;
+        if (!subs && /subscriber|مشترك/i.test(line)) subs = compactCount(line);
+        else if (!videos && /video|فيديو/i.test(line)) videos = compactCount(line);
+      }
+    }
+    if (!subs) {
+      var simple = text.match(/"subscriberCountText":\{[\s\S]{0,700}?"simpleText":"([^"]+)"/);
+      var label = text.match(/"subscriberCountText":\{"accessibility":\{"accessibilityData":\{"label":"([^"]+)"/);
+      subs = compactCount(simple ? simple[1] : (label ? label[1] : ""));
+    }
+    if (!videos) {
+      var vids = text.match(/"videoCountText":\{"runs":\[\{"text":"([^"]+)"/);
+      if (!vids) vids = text.match(/"videoCountText":\{"simpleText":"([^"]+)"/);
+      videos = vids ? compactCount(vids[1]) : "";
+    }
+    return { name: name, subs: subs, videos: videos };
+  }
+
+  function extractWatchMeta(player, data) {
+    var details = player && player.videoDetails;
+    var description = details && typeof details.shortDescription === "string" ? details.shortDescription : "";
+    var videoId = details && typeof details.videoId === "string" ? details.videoId : "";
+    var chapters = [];
+    var seen = new Set();
+    chaptersFromPanels(data && data.engagementPanels, chapters, seen);
+    chaptersFromPanels(player && player.engagementPanels, chapters, seen);
+    if (!chapters.length) chaptersFromMarkers(player, chapters, seen);
+    chapters.sort(function (a, b) { return a.seconds - b.seconds; });
+    return { videoId: videoId, description: description, chapters: chapters };
+  }
+
   function reasonLabel(reason) {
     var labels = {
       manual: "Closed manually",
@@ -547,6 +733,19 @@
       root.classList.toggle("tabyt-layout-on", config.layoutEnabled !== false);
       root.classList.toggle("tabyt-player-resize", config.playerResize === true);
       root.classList.toggle("tabyt-custom-controls", config.customControls !== false);
+      root.classList.toggle("tabyt-still", config.layoutMotion === false);
+      var radius = Math.round(Number(config.layoutRadius));
+      if (!Number.isFinite(radius)) radius = 16;
+      radius = Math.min(28, Math.max(0, radius));
+      root.style.setProperty("--tabyt-player-radius", radius + "px");
+      if (config.rememberLayoutSize !== false) {
+        var side = Math.round(Number(config.layoutSide));
+        if (!Number.isFinite(side)) side = 420;
+        side = Math.min(680, Math.max(280, side));
+        root.style.setProperty("--tabyt-side", side + "px");
+      } else {
+        root.style.removeProperty("--tabyt-side");
+      }
     } catch (_error) {
       /* Ignore non-DOM contexts such as the background worker. */
     }
@@ -580,6 +779,8 @@
     summarizeHistory: summarizeHistory,
     topOffenders: topOffenders,
     downsample: downsample,
+    extractWatchMeta: extractWatchMeta,
+    parseChannelStats: parseChannelStats,
     reasonLabel: reasonLabel,
     hashHue: hashHue,
     videoStillWorthResuming: videoStillWorthResuming,
